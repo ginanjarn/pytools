@@ -88,6 +88,17 @@ class Jedi(sublime_plugin.EventListener):
         return results
 
     def fetch_completions(self, view, prefix, locations):
+        python = load_settings("python")
+        if self.python != python:
+            self.python = python
+            self.client = Client(
+                python_path=self.python, script_path=self.script, sys_env=get_sysenv())
+            view.run_command("pytools_resetjedi")
+            return
+
+        if self.client.server_error or self.client is None:
+            return
+
         cursor = locations[0]
         src = view.substr(sublime.Region(0, cursor))
         raw_completion = self.client.complete(src) if self.client else None
@@ -127,24 +138,10 @@ class Jedi(sublime_plugin.EventListener):
         if not view.match_selector(location, "source.python"):
             return
 
-        python = load_settings("python")
-        if self.python != python:
-            self.python = python
-            self.client = Client(
-                python_path=self.python, script_path=self.script, sys_env=get_sysenv())
-            view.run_command("pytools_resetjedi")
-            return
-
         if self.completions:
             completions = self.completions
             self.completions = None
             return (completions, sublime.INHIBIT_WORD_COMPLETIONS)
-
-        if self.client is None:
-            return
-
-        if self.client.server_error:
-            return
 
         thread = threading.Thread(
             target=self.fetch_completions, args=(view, prefix, locations))
@@ -154,5 +151,9 @@ class Jedi(sublime_plugin.EventListener):
 class PytoolsResetjediCommand(sublime_plugin.TextCommand):
     def run(self, edit):
         view = self.view
+        thread = threading.Thread(target=self.do_reset)
+        thread.start()
+
+    def do_reset(self):
         client = Client()
         client.exit()
