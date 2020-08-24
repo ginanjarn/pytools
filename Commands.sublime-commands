@@ -3,4 +3,5 @@
 	{ "caption": "PyTools: Conda Environment", "command": "pytools_condaenvs" },
 
 	{ "caption": "PyTools: Format Code", "command": "pytools_format" },
+	{ "caption": "PyTools: Lint Code", "command": "pytools_lint" },
 ]
