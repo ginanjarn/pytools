@@ -1,4 +1,6 @@
 [
 	{ "caption": "PyTools: Conda Setup", "command": "pytools_condasetup" },
 	{ "caption": "PyTools: Conda Environment", "command": "pytools_condaenvs" },
+
+	{ "caption": "PyTools: Format Code", "command": "pytools_format" },
 ]
