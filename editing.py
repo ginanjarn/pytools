@@ -2,7 +2,9 @@ import sublime
 import sublime_plugin
 import difflib
 import subprocess
+import threading
 import os
+from .completion.client import Client
 
 
 def load_settings(key):
@@ -58,3 +60,99 @@ class PytoolsFormatCommand(sublime_plugin.TextCommand):
                 diff_sanity_check(view.substr(
                     sublime.Region(i, i+l-1)), line[2:])
                 i += l
+
+
+class Jedi(sublime_plugin.EventListener):
+
+    def __init__(self):
+        self.completions = None
+        self.python = None
+        self.script = None
+        self.client = None
+        self.cur_env = None
+
+    def hint_and_subj(self, name, d_type):
+        hint = "{}\t{}".format(name, d_type)
+        subj = name
+        return hint, subj
+
+    def generate_completions(self, out):
+        results = []
+        for line in out.split("\n"):
+            line = line.strip()
+            arg = line.split(",,")
+            if len(arg) != 2:
+                break
+            hint, subj = self.hint_and_subj(arg[0], arg[1])
+            results.append([hint, subj])
+        return results
+
+    def fetch_completions(self, view, prefix, locations):
+        cursor = locations[0]
+        src = view.substr(sublime.Region(0, cursor))
+        raw_completion = self.client.complete(src) if self.client else None
+
+        if raw_completion in ("None", None):
+            return
+        self.completions = self.generate_completions(raw_completion)
+        self.open_query_completions(view)
+
+    def open_query_completions(self, view):
+        """Opens (forced) the sublime autocomplete window"""
+
+        view.run_command("hide_auto_complete")
+        view.run_command("auto_complete", {
+            "disable_auto_insert": True,
+            "next_completion_if_showing": False,
+            "auto_complete_commit_on_tab": True,
+        })
+
+    def on_query_completions(self, view, prefix, locations):
+        """Sublime autocomplete event handler.
+
+        Get completions depends on current cursor position and return
+        them as list of ('possible completion', 'completion type')
+
+        :param view: currently active sublime view
+        :type view: sublime.View
+        :param prefix: string for completions
+        :type prefix: basestring
+        :param locations: offset from beginning
+        :type locations: int
+
+        :return: list of tuple(str, str)
+        """
+        location = locations[0]
+
+        if not view.match_selector(location, "source.python"):
+            return
+
+        python = load_settings("python")
+        if self.python != python:
+            self.python = python
+            self.client = Client(
+                python_path=self.python, script_path=self.script, sys_env=get_sysenv())
+            view.run_command("pytools_resetjedi")
+            return
+
+        if self.completions:
+            completions = self.completions
+            self.completions = None
+            return (completions, sublime.INHIBIT_WORD_COMPLETIONS)
+
+        if self.client is None:
+            return
+
+        if self.client.server_error:
+            return
+
+        thread = threading.Thread(
+            target=self.fetch_completions, args=(view, prefix, locations))
+        thread.start()
+
+
+class PytoolsResetjediCommand(sublime_plugin.TextCommand):
+    def run(self, edit):
+        view = self.view
+        client = Client()
+        client.exit()
