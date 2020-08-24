@@ -1,6 +1,12 @@
 import socket
-from jedi import Script
 import sys
+import os
+
+try:
+    from jedi import Script
+except ModuleNotFoundError:
+    sys.stderr.write("module not found")
+    sys.exit(2)
 
 
 class Jedi:
