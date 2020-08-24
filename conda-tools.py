@@ -104,6 +104,9 @@ class PytoolsCondaenvsCommand(sublime_plugin.TextCommand):
                                           os.path.join(
                                               prefix, "Library", "bin"),
                                           os.path.join(prefix, "Scripts")])
+        python = os.path.join(prefix, "python.exe") if os.name == "nt" else os.path.join(
+            prefix, "bin", "python")
         save_settings("path", new_paths)
-        save_settings("python", "python")
+        save_settings("python", python)
         save_settings("conda_active", environment)
+        self.view.run_command("pytools_resetjedi")
