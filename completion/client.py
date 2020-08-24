@@ -25,6 +25,10 @@ class Client:
             if rescode == 1:
                 self.terminate = True
                 self.server_error = True
+                print("server error")
+            elif rescode == 2:
+                self.terminate = True
+                self.server_error = True
                 print("module jedi not found")
         except FileNotFoundError:
             print("python not found in PATH")
