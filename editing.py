@@ -1,0 +1,159 @@
+import sublime
+import sublime_plugin
+import difflib
+import subprocess
+import threading
+import os
+from .completion.client import Client
+
+
+def load_settings(key):
+    s = sublime.load_settings("Pytools.sublime-settings")
+    return s.get(key)
+
+
+def get_sysenv():
+    new_paths = load_settings("path")
+    env = os.environ.copy()
+    env['PATH'] = new_paths + os.path.pathsep + env['PATH']
+    return env
+
+
+def diff_sanity_check(a, b):
+    if a != b:
+        raise Exception("diff sanity check mismatch\n-%s\n+%s" % (a, b))
+
+
+class PytoolsFormatCommand(sublime_plugin.TextCommand):
+    def run(self, edit):
+        view = self.view
+        src = view.substr(sublime.Region(0, view.size()))
+
+        try:
+            fmt = subprocess.Popen(["autopep8", "-"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE, creationflags=0x08000000, env=get_sysenv(), shell=True)
+            sout, serr = fmt.communicate(src.encode())
+        except BrokenPipeError:
+            print("autopep8 not found in PATH")
+            return
+
+        if fmt.returncode != 0:
+            print(serr.decode(), end="")
+            return
+
+        newsrc = sout.decode()
+        diff = difflib.ndiff(src.splitlines(), newsrc.splitlines())
+        i = 0
+        for line in diff:
+            if line.startswith("?"):  # skip hint lines
+                continue
+
+            l = (len(line)-2)+1
+            if line.startswith("-"):
+                diff_sanity_check(view.substr(
+                    sublime.Region(i, i+l-1)), line[2:])
+                view.erase(edit, sublime.Region(i, i+l))
+            elif line.startswith("+"):
+                view.insert(edit, i, line[2:]+"\n")
+                i += l
+            else:
+                diff_sanity_check(view.substr(
+                    sublime.Region(i, i+l-1)), line[2:])
+                i += l
+
+
+class Jedi(sublime_plugin.EventListener):
+
+    def __init__(self):
+        self.completions = None
+        self.python = None
+        self.script = None
+        self.client = None
+        self.cur_env = None
+
+    def hint_and_subj(self, name, d_type):
+        hint = "{}\t{}".format(name, d_type)
+        subj = name
+        return hint, subj
+
+    def generate_completions(self, out):
+        results = []
+        for line in out.split("\n"):
+            line = line.strip()
+            arg = line.split(",,")
+            if len(arg) != 2:
+                break
+            hint, subj = self.hint_and_subj(arg[0], arg[1])
+            results.append([hint, subj])
+        return results
+
+    def fetch_completions(self, view, prefix, locations):
+        python = load_settings("python")
+        if self.python != python:
+            self.python = python
+            self.client = Client(
+                python_path=self.python, script_path=self.script, sys_env=get_sysenv())
+            view.run_command("pytools_resetjedi")
+            return
+
+        if self.client.server_error or self.client is None:
+            return
+
+        cursor = locations[0]
+        src = view.substr(sublime.Region(0, cursor))
+        raw_completion = self.client.complete(src) if self.client else None
+
+        if raw_completion in ("None", None):
+            return
+        self.completions = self.generate_completions(raw_completion)
+        self.open_query_completions(view)
+
+    def open_query_completions(self, view):
+        """Opens (forced) the sublime autocomplete window"""
+
+        view.run_command("hide_auto_complete")
+        view.run_command("auto_complete", {
+            "disable_auto_insert": True,
+            "next_completion_if_showing": False,
+            "auto_complete_commit_on_tab": True,
+        })
+
+    def on_query_completions(self, view, prefix, locations):
+        """Sublime autocomplete event handler.
+
+        Get completions depends on current cursor position and return
+        them as list of ('possible completion', 'completion type')
+
+        :param view: currently active sublime view
+        :type view: sublime.View
+        :param prefix: string for completions
+        :type prefix: basestring
+        :param locations: offset from beginning
+        :type locations: int
+
+        :return: list of tuple(str, str)
+        """
+        location = locations[0]
+
+        if not view.match_selector(location, "source.python"):
+            return
+
+        if self.completions:
+            completions = self.completions
+            self.completions = None
+            return (completions, sublime.INHIBIT_WORD_COMPLETIONS)
+
+        thread = threading.Thread(
+            target=self.fetch_completions, args=(view, prefix, locations))
+        thread.start()
+
+
+class PytoolsResetjediCommand(sublime_plugin.TextCommand):
+    def run(self, edit):
+        view = self.view
+        thread = threading.Thread(target=self.do_reset)
+        thread.start()
+
+    def do_reset(self):
+        client = Client()
+        client.exit()
