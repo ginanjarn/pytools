@@ -1,35 +1,34 @@
 # PYTOOLS (SUBLIME TEXT PYTHON TOOLS)
 
-# FEATURES
+## FEATURES
 * Code completion with `jedi`.
 * Format code with `autopep8`.
 * Lint package with `pylint`.
 * **Conda** integration.
 
-# INSTALL
+## INSTALL
 Clone `github.com/ginanjarn/pytools` in your sublime text package installation directory.
 >On **SublimeText** menu click ***Preferences>BrowsePackage***.
 
-# SETUP
+## SETUP
 >**Python** automatically detected if ***anaconda/miniconda*** installed in `USER` path.
 
 1. Config **python** manually by define:
 ~~~json
 {
-	//Pytools.sublime-settings
+	// Pytools.sublime-settings
 	"python":"python.exe",
 	"env":"path_environment",
 }
 ~~~
-
 2. Use **command palette** (`ctrl+shift+p`) run command `PyTools: Conda Setup`. (*anaconda/miniconda required*)
 
-# CONDA
+## CONDA
 * **Setup** conda environment in **command palette** with  `PyTools: Conda Setup`.
 * **Change** conda environment in **command palette** with `PyTools: Conda Environment`.
 >Settings for `python` and `env` will changed to current activated environment.
 
-# TROUBLESHOOT
+## TROUBLESHOOT
 * Make sure if python is defined in settings.
 * Anaconda/Miniconda required for conda environment.
 * Required package:
