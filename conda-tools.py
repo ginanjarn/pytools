@@ -27,7 +27,9 @@ class PytoolsCondasetupCommand(sublime_plugin.TextCommand):
         view = self.view
         condadir = None
 
-        home = os.environ["HOME"]
+        user_env = "USERPROFILE" if os.name == "nt" else "HOME"
+
+        home = os.environ[user_env]
         conda_basedirname = ["anaconda2",
                              "anaconda3", "miniconda2", "miniconda3"]
 
@@ -45,7 +47,8 @@ class PytoolsCondasetupCommand(sublime_plugin.TextCommand):
 
     def input_condadir(self):
         env = os.environ
-        prefix = env["HOME"]
+        user_env = "USERPROFILE" if os.name == "nt" else "HOME"
+        prefix = env[user_env]
         self.view.window().show_input_panel("Anaconda install path", prefix,
                                             lambda p: self.parse_conda_input(p), None, None)
 
