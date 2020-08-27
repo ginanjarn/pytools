@@ -27,7 +27,9 @@ class PytoolsCondasetupCommand(sublime_plugin.TextCommand):
         view = self.view
         condadir = None
 
-        home = os.environ["HOME"]
+        user_env = "USERPROFILE" if os.name == "nt" else "HOME"
+
+        home = os.environ[user_env]
         conda_basedirname = ["anaconda2",
                              "anaconda3", "miniconda2", "miniconda3"]
 
@@ -45,7 +47,8 @@ class PytoolsCondasetupCommand(sublime_plugin.TextCommand):
 
     def input_condadir(self):
         env = os.environ
-        prefix = env["HOME"]
+        user_env = "USERPROFILE" if os.name == "nt" else "HOME"
+        prefix = env[user_env]
         self.view.window().show_input_panel("Anaconda install path", prefix,
                                             lambda p: self.parse_conda_input(p), None, None)
 
@@ -82,16 +85,21 @@ class PytoolsCondaenvsCommand(sublime_plugin.TextCommand):
     def run(self, edit):
         view = self.view
         envs = load_settings("conda_envs")
+        if not envs:
+            return
         active_env = load_settings("conda_active")
         try:
             env_i = envs.index(active_env)
-        except ValueError:
+        except:
             env_i = 0
 
         view.window().show_quick_panel(envs, lambda i: self.set_env(
-            envs[i]), sublime.KEEP_OPEN_ON_FOCUS_LOST, env_i, None)
+            envs,i), sublime.KEEP_OPEN_ON_FOCUS_LOST, env_i, None)
 
-    def set_env(self, environment):
+    def set_env(self, envs, index):
+        if index == -1:
+            return
+        environment = envs[index]
         condadir = load_settings("conda_dir")
         prefix = condadir if environment == "base" else os.path.join(
             condadir, "envs", environment)

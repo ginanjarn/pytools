@@ -95,8 +95,10 @@ class Jedi(sublime_plugin.EventListener):
                 python_path=self.python, script_path=self.script, sys_env=get_sysenv())
             view.run_command("pytools_resetjedi")
             return
+        if self.client is None:
+            return
 
-        if self.client.server_error or self.client is None:
+        if self.client.server_error:
             return
 
         cursor = locations[0]
