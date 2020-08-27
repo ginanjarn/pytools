@@ -66,6 +66,7 @@ class PytoolsCondasetupCommand(sublime_plugin.TextCommand):
         envs = self.load_envs(installed_path)
         save_settings("conda_dir", installed_path)
         save_settings("conda_envs", envs)
+        save_settings("conda_active", "base")
 
         self.view.run_command("pytools_condaenvs")
 
