@@ -86,10 +86,12 @@ class PytoolsCondaenvsCommand(sublime_plugin.TextCommand):
     def run(self, edit):
         view = self.view
         envs = load_settings("conda_envs")
+        if not envs:
+            return
         active_env = load_settings("conda_active")
         try:
             env_i = envs.index(active_env)
-        except ValueError:
+        except:
             env_i = 0
 
         view.window().show_quick_panel(envs, lambda i: self.set_env(
