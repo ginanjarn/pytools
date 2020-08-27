@@ -66,7 +66,6 @@ class PytoolsCondasetupCommand(sublime_plugin.TextCommand):
         envs = self.load_envs(installed_path)
         save_settings("conda_dir", installed_path)
         save_settings("conda_envs", envs)
-        save_settings("conda_active", "base")
 
         self.view.run_command("pytools_condaenvs")
 
@@ -95,9 +94,12 @@ class PytoolsCondaenvsCommand(sublime_plugin.TextCommand):
             env_i = 0
 
         view.window().show_quick_panel(envs, lambda i: self.set_env(
-            envs[i]), sublime.KEEP_OPEN_ON_FOCUS_LOST, env_i, None)
+            envs,i), sublime.KEEP_OPEN_ON_FOCUS_LOST, env_i, None)
 
-    def set_env(self, environment):
+    def set_env(self, envs, index):
+        if index == -1:
+            return
+        environment = envs[index]
         condadir = load_settings("conda_dir")
         prefix = condadir if environment == "base" else os.path.join(
             condadir, "envs", environment)
