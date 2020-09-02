@@ -28,11 +28,23 @@ class PytoolsFormatCommand(sublime_plugin.TextCommand):
     def run(self, edit):
         view = self.view
         src = view.substr(sublime.Region(0, view.size()))
+        fmt_env = get_sysenv()
 
         try:
-            fmt = subprocess.Popen(["autopep8", "-"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                   stderr=subprocess.PIPE, creationflags=0x08000000, env=get_sysenv(), shell=True)
-            sout, serr = fmt.communicate(src.encode())
+            fmt_process_cmd = ["autopep8", "-"]
+
+            if os.name == "nt":
+                # linux subprocess module does not have STARTUPINFO
+                # so only use it if on Windows
+                si = subprocess.STARTUPINFO()
+                si.dwFlags |= subprocess.SW_HIDE | subprocess.STARTF_USESHOWWINDOW
+                fmt_proc = subprocess.Popen(fmt_process_cmd,shell=True,
+                                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=fmt_env, startupinfo=si, bufsize=-1)
+            else:
+                fmt_proc = subprocess.Popen(fmt_process_cmd,shell=True,
+                                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=fmt_env, bufsize=-1)
+
+            sout,serr = fmt_proc.communicate(src.encode())
         except BrokenPipeError:
             print("autopep8 not found in PATH")
             return

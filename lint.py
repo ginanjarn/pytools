@@ -46,13 +46,24 @@ class PytoolsLintCommand(sublime_plugin.TextCommand):
         return "\n".join(lines)
 
     def do_lint(self, work_dir, file_name):
-        gvt = subprocess.Popen(["pylint", file_name], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE, creationflags=0x08000000, cwd=work_dir, env=get_sysenv(), shell=True)
-        sout, serr = gvt.communicate()
+        lint_process_cmd = ["pylint", file_name]
+        lint_env = get_sysenv()
+        if os.name == "nt":
+            # linux subprocess module does not have STARTUPINFO
+            # so only use it if on Windows
+            si = subprocess.STARTUPINFO()
+            si.dwFlags |= subprocess.SW_HIDE | subprocess.STARTF_USESHOWWINDOW
+            lint_proc = subprocess.Popen(lint_process_cmd,shell=True,
+                                                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=lint_env, startupinfo=si, bufsize=-1)
+        else:
+            lint_proc = subprocess.Popen(lint_process_cmd,shell=True,
+                                                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=lint_env, bufsize=-1)
 
-        if gvt.returncode == 0:
+        sout, serr = lint_proc.communicate()
+
+        if lint_proc.returncode == 0:
             hide_outputpane()
-        elif gvt.returncode == 1:
+        elif lint_proc.returncode == 1:
             print(self.format_output(serr.decode()))
         else:
             print_to_outputpane(self.format_output(sout.decode()))
