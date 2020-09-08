@@ -1,4 +1,5 @@
-import socket
+import socket, json
+from .service.completion import Completion, jedi_error
 
 def get_content_length(source:str) -> int:
     content_length = -1
@@ -58,9 +59,61 @@ class Server:
                 result = self.do(get_content(body).decode())
                 # TODO: Send result data
                 conn.sendall(result.encode())
-    def do(self):
-        pass
+    def do(self,source):
+        rpc_result = {"jsonrpc":"2.0"}
+        rpc_error = {"code":0}
+        try:
+            # loaded from request
+            obj = json.loads(source)
+            method = obj["method"]
+            params = obj["params"]
+            rpc_result["id"] = obj["id"]
 
+            result,err = self._act(method,params)
+            rpc_result["results"]=result
+            rpc_result["error"] = err
+
+
+            content = json.dumps(result)
+            msg = f"Content-Length: {len(content)}\r\n\r\n{content}"
+            return msg
+        except ValueError:
+            # TODO return error response
+            return {""}
+   
+    def _act(self, method, params):
+        # ACTION---------------
+
+        if method == "init":
+            if jedi_error:
+                rpc_result["results"]=None
+                rpc_result["error"] = {"code":30,"message":"module jedi not found"}
+                return rpc_result
+            rpc_result["results"]=None
+            return rpc_result
+
+
+        if method == "textDocument/completion":
+            # jedi use 1 based line
+            line = params["line"]+1
+            characters = params["characters"]
+            source = "DocumentUri"
+            c = Completion(source)
+            results,err = c.complete(line,characters)
+            if err:
+                rpc_result["results"]=None
+                rpc_result["error"]={"code":12,"message":err}
+            else:
+                rpc_result["results"] = results
+            return rpc_result
+            
+        # UNKNOWN method -----------------
+        else:
+            # TODO return method not found
+            return
+
+        # TODO return success response
+        # return
 
 
 
