@@ -1,83 +1,133 @@
-import socket,json
+import socket
+import json
+import os
+import subprocess
 
-def get_content_length(source:str) -> int:
-    content_length = -1
-    head_body = source.split("\r\n\r\n")
-    if len(head_body) != 2:
-        return
-    head = head_body[0]
-    head_row = head.split("\r\n")
-    for row in head_row:
-        key_val = row.split(": ")
-        if len(key_val) != 2:
+
+def pack(content: str) -> bytes:
+    """Pack string content to binary.
+    Header define content property
+    Params
+    ------
+    content: str
+        content string
+    Returns
+    ------
+    data: bytes
+        bytes binary data"""
+
+    cnt = content.encode("utf-8")
+    head = f"Content-Length: {len(cnt)}\r\n\r\n"
+    return head.encode("ascii")+cnt
+
+
+def unpack(raw: bytes) -> (str, any):
+    """Unpack raw data
+    Params
+    ------
+    raw: bytes
+        raw data that contain content length
+    Returns:
+    --------
+    content: str
+        string content result
+    error: any
+        error message if occured"""
+    raw_l = raw.decode("ascii").split("\r\n\r\n")
+    if len(raw_l) != 2:
+        return "", "invalid raw"
+    head = raw_l[0]
+    head_l = head.split("\r\n")
+    if len(head_l) == 0:
+        return "", "head not assigned"
+    cnt_len: int = 0
+    for row in head_l:
+        cols = row.split(": ")
+        if len(cols) != 2:
             break
-        if key_val[0] == "Content-Length":
-            content_length = key_val[1]
+        if cols[0] == "Content-Length":
+            cnt_len = int(cols[1])
             break
-    return int(content_length)
+    body = raw_l[1]
+    if len(body) != cnt_len:
+        return "", "content not valid"
+    return body, None
 
-def get_content(source:str) -> str:
-    head_body = source.split("\r\n\r\n")
-    if len(head_body) != 2:
-        return ''
-    return head_body[1]
-
-def get_body_length(source:str) -> int:
-    head_body = source.split("\r\n\r\n")
-    if len(head_body) != 2:
-        return ''
-    cnt_len = get_content_length(source)
-    separator_len = len("\r\n\r\n")
-    return len(head_body[0])+cnt_len+separator_len
 
 class Client:
-	def __init__(self,python=None,env=None):
-		self.python = python
-		self.env = env
-		self._server_running = False
-		self._server_error = False
-		self.req_id = 0
+    def __init__(self, python="python", env=None):
+        self.python = python
+        self.env = env
+        self._server_running = False
+        self._server_error = False
+        self.req_id = 0
 
-	def _run_server(self):
-		run_server_cmd = ["python", "-"]
-
+    def _run_server(self):
+        def get_server():
+            filepath = os.path.abspath(__file__)
+            path_list = filepath.split(os.sep)
+            serverpath = os.sep.join(path_list[:-2]+["server", "service.py"])
+            return serverpath
+        run_server_cmd = [self.python, get_server()]
         if os.name == "nt":
             # linux subprocess module does not have STARTUPINFO
             # so only use it if on Windows
             si = subprocess.STARTUPINFO()
             si.dwFlags |= subprocess.SW_HIDE | subprocess.STARTF_USESHOWWINDOW
-            subprocess.Popen(run_server_cmd,shell=True, env=self.env, startupinfo=si)
+            subprocess.Popen(run_server_cmd, shell=True,
+                             env=self.env, startupinfo=si)
         else:
-            subprocess.Popen(run_server_cmd,shell=True, env=self.env)
+            subprocess.Popen(run_server_cmd, shell=True, env=self.env)
 
-		pass
+            pass
 
-	def request(self,method,params):
-		try:
-			HOST = '127.0.0.1'  # The server's hostname or IP address
-			PORT = 65432        # The port used by the server
-			
-			with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-			    s.connect((HOST, PORT))
-			    self.req_id +=1
-			    # params = json.dumps(params)
-			    rpc_request = {"jsonrpc":"2.0","id":f"{self.req_id}",'method':method,"params":params}
-			    content = json.dumps(rpc_request)
-			    msg = f"Content-Length: {len(content)}\r\n\r\n{content}"
-			    s.sendall(msg)
+    def request(self, content: str) -> (str, any):
+        try:
+            HOST = '127.0.0.1'  # The server's hostname or IP address
+            PORT = 65432        # The port used by the server
 
-			    resp_len = 0
-			    resp_body = b""
-			    while True:
-				    data = s.recv(1024)
-				    if resp_len == 0:
-					    resp_len = get_body_length(data)
-				    resp_body += data
-				    if resp_len >= len(resp_body):
-				    	break
-		    	resp_content = get_content(resp_body)
-		    	resp_obj = json.loads(resp_content)
-			
-			print('Received', repr(data))
-		except ConnectionRefusedError:
-			# run server if not running
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.connect((HOST, PORT))
+                msg = pack(content)
+                s.sendall(msg)
+
+                raw = b""
+                result = ""
+                while True:
+                    data = s.recv(1024)
+                    res, err = unpack(raw)
+                    if not err:
+                        result = res
+                        break
+                    raw += data
+
+            return result
+
+            # print('Received', repr(data))
+        except ConnectionRefusedError:
+            # run server if not running
+            self._run_server()
+            return ""
+
+    def do(self, method, params) -> any:
+        try:
+            msg = {"jsonrpc": "2.0", "id": self.req_id,
+                   "method": method, "params": params}
+            result = self.request(json.dumps(msg))
+            if result == "":
+                return
+            result = json.loads(result)
+            if result["id"] != self.req_id:
+                return
+            self.req_id += 1
+            return result["result"]
+        except ValueError:
+            return None
+
+    def complete(self, source, line, character):
+        params = {"uri": source, "position": {
+            "line": line, "character": character}}
+        result = self.do("textDocument/completion", params)
+        if not result:
+            return None
+        return result
