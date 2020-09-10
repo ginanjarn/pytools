@@ -64,6 +64,14 @@ def unpack(raw: bytes) -> (any, any):
     else:
         return body, None
 
+class ErrorCodes:
+    ParseError = -32700
+    InvalidRequest = -32600
+    MethodNotFound = -32601
+    InvalidParams = -32602
+    InternalError = -32603
+    serverErrorStart = -32099
+    serverErrorEnd = -32000
 
 class Client:
     def __init__(self, python="python", env=None):
@@ -141,17 +149,20 @@ class Client:
 
             # print('Received', repr(data))
         except ConnectionRefusedError:
-            # run server if not running
-            # only if server not error or running
-            if self._server_running:
-                return "", None
-            # prevent re-running error server
-            if self._server_activate_retry < 5:
-                if not self._server_error:
-                    self._run_server()
-            else:
-                self._server_error = True
+            return "", ErrorCodes.serverErrorStart
+    
+    def try_running_server(self):
+        # run server if not running
+        # only if server not error or running
+        if self._server_running:
             return "", None
+        # prevent re-running error server
+        if self._server_activate_retry < 5:
+            if not self._server_error:
+                self._run_server()
+        else:
+            self._server_error = True
+
 
     def request(self, method, params=None) -> any:
         try:
@@ -161,17 +172,19 @@ class Client:
             msg_str = json.dumps(msg)
             result, err = self._request(msg_str)
             if err:
+                if err == ErrorCodes.serverErrorStart:
+                    self.try_running_server()
                 return
             result = json.loads(result)
             if result["id"] != self.req_id:
                 return
             self.req_id += 1
             return result["result"]
-        except ValueError:
+        except (KeyError,ValueError):
             return None
 
-    def test_con(self):
-        result = self.request("test_conn")
+    def test_conn(self,message=""):
+        result = self.request("test_conn"+message)
         return result
 
     def complete(self, source, line, character):

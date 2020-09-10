@@ -1,5 +1,6 @@
 import socket
 import json
+import argparse
 from service.completion import Completion, jedi_error  # pylint: disable=import-error
 
 
@@ -75,8 +76,9 @@ class ErrorCodes:
 
 
 class Server:
-    def __init__(self):
-        pass
+    def __init__(self,**kwargs):
+        self._test_conn = kwargs.get("test_conn",False)
+        self._run_forever = kwargs.get("run_forever",True)
 
     def run_service(self):
         HOST = '127.0.0.1'  # Standard loopback interface address (localhost)
@@ -86,37 +88,45 @@ class Server:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.bind((HOST, PORT))
             s.listen()
-            conn, addr = s.accept()
-            with conn:
-                print('Connected by', addr)
-                raw = b""
-                content, error = "", None
-                while True:
-                    data = conn.recv(1024)
-                    raw += data
-                    result, err = unpack(raw)
-                    if err == Encoding.ContentIncomplete:
-                        pass
-                    elif err == Encoding.ContentOverflow:
-                        content = ""
-                        error = err
-                        break
-                    elif err == Encoding.InvalidData:
-                        content = ""
-                        error = err
-                        break
-                    elif err == Encoding.HeaderEmpty:
-                        content = ""
-                        error = err
-                        break
-                    else:
-                        content = result
-                        break
-                # TODO: process(content,error)
-                result_str = self.process(content, error)
-                # TODO: Send result data
-                result = pack(result_str)
-                conn.sendall(result)
+            while True:
+                conn, addr = s.accept()
+                with conn:
+                    print('Connected by', addr)
+                    raw = b""
+                    content, error = "", None
+                    while True:
+                        data = conn.recv(1024)
+                        raw += data
+                        result, err = unpack(raw)
+                        if err == Encoding.ContentIncomplete:
+                            pass
+                        elif err == Encoding.ContentOverflow:
+                            content = ""
+                            error = err
+                            break
+                        elif err == Encoding.InvalidData:
+                            content = ""
+                            error = err
+                            break
+                        elif err == Encoding.HeaderEmpty:
+                            content = ""
+                            error = err
+                            break
+                        else:
+                            content = result
+                            break
+                    if self._test_conn:
+                        result = pack(content)
+                        conn.sendall(result)
+                        return
+                    # TODO: process(content,error)
+                    result_str = self.process(content, error)
+                    # TODO: Send result data
+                    result = pack(result_str)
+                    conn.sendall(result)
+                # break if not run forever
+                if not self._run_forever:
+                    break
 
     def process(self, content: str, cnt_error: any) -> str:
         """Process request data
@@ -199,5 +209,11 @@ class Server:
 
 
 if __name__ == '__main__':
-    s = Server()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--test_conn",help="testing connection server",action="store_true")
+    args = parser.parse_args()
+    if args.test_conn:
+        s = Server(test_conn=True,run_forever=False)
+    else:
+        s = Server()
     s.run_service()
