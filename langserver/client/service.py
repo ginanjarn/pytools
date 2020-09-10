@@ -21,7 +21,15 @@ def pack(content: str) -> bytes:
     return head.encode("ascii")+cnt
 
 
-def unpack(raw: bytes) -> (str, any):
+class Encoding:
+    """Encoding error value"""
+    InvalidData = "invalid data"
+    HeaderEmpty = "header empty"
+    ContentIncomplete = "content incomplete"
+    ContentOverflow = "content overflow"
+
+
+def unpack(raw: bytes) -> (any, any):
     """Unpack raw data
     Params
     ------
@@ -30,7 +38,7 @@ def unpack(raw: bytes) -> (str, any):
     Returns:
     --------
     content: str
-        string content result
+        string content result, or None if content overflow
     error: any
         error message if occured"""
     raw_l = raw.decode("ascii").split("\r\n\r\n")
@@ -49,9 +57,12 @@ def unpack(raw: bytes) -> (str, any):
             cnt_len = int(cols[1])
             break
     body = raw_l[1]
-    if len(body) != cnt_len:
+    if len(body) < cnt_len:
         return "", "content not valid"
-    return body, None
+    elif len(body) > cnt_len:
+        return None, "content overflow"
+    else:
+        return body, None
 
 
 class Client:
@@ -61,6 +72,7 @@ class Client:
         self._server_running = False
         self._server_error = False
         self.req_id = 0
+        self._server_activate_retry = 0
 
     def _run_server(self):
         def get_server():
@@ -78,10 +90,21 @@ class Client:
                              env=self.env, startupinfo=si)
         else:
             subprocess.Popen(run_server_cmd, shell=True, env=self.env)
+            # pass
+        self._server_activate_retry += 1
 
-            pass
-
-    def request(self, content: str) -> (str, any):
+    def _request(self, content: str) -> (str, any):
+        """Request message to server
+        Params
+        ------
+        content
+            content string
+        Returns
+        ------
+        result
+            result string
+        error
+            if occured, or None"""
         try:
             HOST = '127.0.0.1'  # The server's hostname or IP address
             PORT = 65432        # The port used by the server
@@ -92,29 +115,52 @@ class Client:
                 s.sendall(msg)
 
                 raw = b""
-                result = ""
+                content, error = "", None
                 while True:
                     data = s.recv(1024)
-                    res, err = unpack(raw)
-                    if not err:
-                        result = res
-                        break
                     raw += data
-
-            return result
+                    result, err = unpack(raw)
+                    if err == Encoding.ContentIncomplete:
+                        pass
+                    elif err == Encoding.ContentOverflow:
+                        content = ""
+                        error = err
+                        break
+                    elif err == Encoding.InvalidData:
+                        content = ""
+                        error = err
+                        break
+                    elif err == Encoding.HeaderEmpty:
+                        content = ""
+                        error = err
+                        break
+                    else:
+                        content = result
+                        break
+            return content, error
 
             # print('Received', repr(data))
         except ConnectionRefusedError:
             # run server if not running
-            self._run_server()
-            return ""
+            # only if server not error or running
+            if self._server_running:
+                return "", None
+            # prevent re-running error server
+            if self._server_activate_retry < 5:
+                if not self._server_error:
+                    self._run_server()
+            else:
+                self._server_error = True
+            return "", None
 
-    def do(self, method, params) -> any:
+    def request(self, method, params=None) -> any:
         try:
             msg = {"jsonrpc": "2.0", "id": self.req_id,
                    "method": method, "params": params}
-            result = self.request(json.dumps(msg))
-            if result == "":
+
+            msg_str = json.dumps(msg)
+            result, err = self._request(msg_str)
+            if err:
                 return
             result = json.loads(result)
             if result["id"] != self.req_id:
@@ -124,10 +170,14 @@ class Client:
         except ValueError:
             return None
 
+    def test_con(self):
+        result = self.request("test_conn")
+        return result
+
     def complete(self, source, line, character):
-        params = {"uri": source, "position": {
+        params = {"textDocument": {"uri": source}, "position": {
             "line": line, "character": character}}
-        result = self.do("textDocument/completion", params)
+        result = self.request("textDocument/completion", params)
         if not result:
             return None
         return result

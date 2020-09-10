@@ -1,5 +1,5 @@
 import unittest
-from service import pack, unpack, Client   # pylint: disable=import-error
+from main import pack, unpack   # pylint: disable=no-name-in-module
 
 
 class ServiceTest(unittest.TestCase):
@@ -16,13 +16,10 @@ class ServiceTest(unittest.TestCase):
         expect = unpack(t1)
         self.assertEqual(want, expect, "unpacking")
 
-    def test_client_request(self):
-        # def do(self, method, params) -> any:
-        want = {"jsonrpc": "2.0", "id": 0,
-                "method": "docExt", "params": {"pos": 24}}
-        expect = Client().do(method="docExt", params={"pos", 24})
-        self.assertEqual(want, expect)
-        pass
+    def test_server_process(self):
+        want = ""
+        expect = ""
+        self.assertEqual(want,expect,"do")
 
 
 if __name__ == '__main__':
