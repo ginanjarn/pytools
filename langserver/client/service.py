@@ -2,6 +2,7 @@ import socket
 import json
 import os
 import subprocess
+import time
 
 
 def pack(content: str) -> bytes:
@@ -179,8 +180,14 @@ class Client:
             result, err = self._request(msg_str)
             if err:
                 if err == ErrorCodes.serverErrorStart:
-                    self.try_running_server()
-                return
+                    if not self._server_error:
+                        self.try_running_server()
+                        time.sleep(2)
+                        result, err = self._request(msg_str)
+                    else:
+                        return
+                else: 
+                    return
             result = json.loads(result)
             print(result)
             if result["id"] != self.req_id:
