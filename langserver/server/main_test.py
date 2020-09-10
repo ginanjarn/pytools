@@ -1,5 +1,5 @@
 import unittest
-from main import pack, unpack   # pylint: disable=no-name-in-module
+from main import pack, unpack, Server   # pylint: disable=no-name-in-module
 
 
 class ServiceTest(unittest.TestCase):
@@ -16,10 +16,13 @@ class ServiceTest(unittest.TestCase):
         expect = unpack(t1)
         self.assertEqual(want, expect, "unpacking")
 
-    def test_server_process(self):
-        want = ""
-        expect = ""
-        self.assertEqual(want,expect,"do")
+    def test_server_complete(self):
+        want = [{'label': 'sklearn', 'kind': 'module'}]
+        s = Server()
+        params = {"textDocument":{"uri":"from sk"},"position":{"line":0,"character":7}}
+        result, _ = s.complete(params)
+        expect = result
+        self.assertEqual(want, expect, "complete")
 
 
 if __name__ == '__main__':

@@ -115,6 +115,8 @@ class Server:
                         else:
                             content = result
                             break
+
+                    # return all received data
                     if self._test_conn:
                         result = pack(content)
                         conn.sendall(result)
@@ -180,12 +182,12 @@ class Server:
             return params
 
         elif method == "textDocument/completion":
-            result, err = self._complete(params)
+            result, err = self.complete(params)
             return result, {"code": ErrorCodes.InternalError, "message": err}
         else:
             return None, {"code": ErrorCodes.MethodNotFound, "message": method}
 
-    def _complete(self, params) -> (any, any):
+    def complete(self, params) -> (any, any):
         """Do complete
         Params
         ------
@@ -198,10 +200,10 @@ class Server:
         error"""
         try:
             src = params["textDocument"]["uri"]
-            line = params["location"]["line"]
+            line = params["position"]["line"]
             # jedi line is one based
             line += 1
-            character = params["location"]["character"]
+            character = params["position"]["character"]
             s = Completion(src)
             return s.complete(line, character)
         except ValueError as e:
@@ -211,9 +213,12 @@ class Server:
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--test_conn",help="testing connection server",action="store_true")
+    parser.add_argument("--test",help="testing mode",action="store_true")
     args = parser.parse_args()
     if args.test_conn:
         s = Server(test_conn=True,run_forever=False)
+    elif args.test:
+        s = Server(run_forever=False)
     else:
-        s = Server()
+        s = Server(run_forever=True)
     s.run_service()

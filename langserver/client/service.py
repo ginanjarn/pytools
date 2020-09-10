@@ -64,6 +64,7 @@ def unpack(raw: bytes) -> (any, any):
     else:
         return body, None
 
+
 class ErrorCodes:
     ParseError = -32700
     InvalidRequest = -32600
@@ -73,16 +74,18 @@ class ErrorCodes:
     serverErrorStart = -32099
     serverErrorEnd = -32000
 
+
 class Client:
-    def __init__(self, python="python", env=None):
+    def __init__(self, python="python", env=None, **kwargs):
         self.python = python
         self.env = env
+        self._run_server = kwargs.get("run_server", True)
         self._server_running = False
         self._server_error = False
         self.req_id = 0
         self._server_activate_retry = 0
 
-    def _run_server(self):
+    def run_server(self):
         def get_server():
             filepath = os.path.abspath(__file__)
             path_list = filepath.split(os.sep)
@@ -150,19 +153,22 @@ class Client:
             # print('Received', repr(data))
         except ConnectionRefusedError:
             return "", ErrorCodes.serverErrorStart
-    
+
     def try_running_server(self):
+        # don't run if not allowed
+        if not self._run_server:
+            return
         # run server if not running
-        # only if server not error or running
         if self._server_running:
-            return "", None
-        # prevent re-running error server
+            return
+        # prevent run if server broken
         if self._server_activate_retry < 5:
             if not self._server_error:
-                self._run_server()
+                # running server
+                self.run_server()
         else:
+            # counter >= 5  ---> server broken
             self._server_error = True
-
 
     def request(self, method, params=None) -> any:
         try:
@@ -176,15 +182,18 @@ class Client:
                     self.try_running_server()
                 return
             result = json.loads(result)
+            print(result)
             if result["id"] != self.req_id:
                 return
             self.req_id += 1
-            return result["result"]
-        except (KeyError,ValueError):
+            return result["results"]
+        except (KeyError, ValueError):
             return None
 
-    def test_conn(self,message=""):
-        result = self.request("test_conn"+message)
+    def test_conn(self, message=""):
+        result, err = self._request(message)
+        if err:
+            return err
         return result
 
     def complete(self, source, line, character):
