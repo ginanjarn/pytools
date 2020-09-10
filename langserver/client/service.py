@@ -86,7 +86,7 @@ class Client:
         def get_server():
             filepath = os.path.abspath(__file__)
             path_list = filepath.split(os.sep)
-            serverpath = os.sep.join(path_list[:-2]+["server", "service.py"])
+            serverpath = os.sep.join(path_list[:-2]+["server", "main.py"])
             return serverpath
         run_server_cmd = [self.python, get_server()]
         if os.name == "nt":
