@@ -49,7 +49,7 @@ class PytoolsFormatCommand(sublime_plugin.TextCommand):
             print("autopep8 not found in PATH")
             return
 
-        if fmt.returncode != 0:
+        if fmt_proc.returncode != 0:
             print(serr.decode(), end="")
             return
 
