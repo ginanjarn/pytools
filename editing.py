@@ -4,7 +4,9 @@ import difflib
 import subprocess
 import threading
 import os
-from .completion.client import Client
+# from .completion.client import Client
+from .langserver.client.service import Client
+from .langserver.client.sublimetext import completion
 
 
 def load_settings(key):
@@ -49,7 +51,7 @@ class PytoolsFormatCommand(sublime_plugin.TextCommand):
             print("autopep8 not found in PATH")
             return
 
-        if fmt.returncode != 0:
+        if fmt_proc.returncode != 0:
             print(serr.decode(), end="")
             return
 
@@ -75,51 +77,23 @@ class PytoolsFormatCommand(sublime_plugin.TextCommand):
 
 
 class Jedi(sublime_plugin.EventListener):
-
     def __init__(self):
         self.completions = None
-        self.python = None
-        self.script = None
         self.client = None
-        self.cur_env = None
 
-    def hint_and_subj(self, name, d_type):
-        hint = "{}\t{}".format(name, d_type)
-        subj = name
-        return hint, subj
 
-    def generate_completions(self, out):
-        results = []
-        for line in out.split("\n"):
-            line = line.strip()
-            arg = line.split(",,")
-            if len(arg) != 2:
-                break
-            hint, subj = self.hint_and_subj(arg[0], arg[1])
-            results.append([hint, subj])
-        return results
-
-    def fetch_completions(self, view, prefix, locations):
-        python = load_settings("python")
-        if self.python != python:
-            self.python = python
-            self.client = Client(
-                python_path=self.python, script_path=self.script, sys_env=get_sysenv())
-            view.run_command("pytools_resetjedi")
-            return
-        if self.client is None:
-            return
-
-        if self.client.server_error:
-            return
-
+    def fetch_completions(self, view, prefix, locations):        
         cursor = locations[0]
         src = view.substr(sublime.Region(0, cursor))
-        raw_completion = self.client.complete(src) if self.client else None
+        row, col = view.rowcol(cursor)
 
-        if raw_completion in ("None", None):
+        if not self.client:
             return
-        self.completions = self.generate_completions(raw_completion)
+        raw_completion = self.client.complete(src,row,col)
+        completions = completion.format_code(raw_completion)
+        # print(repr(completions))
+        if completions:
+            self.completions = completions
         self.open_query_completions(view)
 
     def open_query_completions(self, view):
@@ -157,17 +131,14 @@ class Jedi(sublime_plugin.EventListener):
             self.completions = None
             return (completions, sublime.INHIBIT_WORD_COMPLETIONS)
 
+        if not self.client:
+            python = load_settings("python")
+            env = get_sysenv()
+            self.client = Client(python=python,env=env)
+            self.client.initialize()
+
         thread = threading.Thread(
             target=self.fetch_completions, args=(view, prefix, locations))
         thread.start()
 
 
-class PytoolsResetjediCommand(sublime_plugin.TextCommand):
-    def run(self, edit):
-        view = self.view
-        thread = threading.Thread(target=self.do_reset)
-        thread.start()
-
-    def do_reset(self):
-        client = Client()
-        client.exit()

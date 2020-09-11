@@ -48,7 +48,7 @@ def unpack(raw: bytes) -> (any, any):
     head_l = head.split("\r\n")
     if len(head_l) == 0:
         return "", Encoding.HeaderEmpty
-    cnt_len: int = 0
+    cnt_len = 0
     for row in head_l:
         cols = row.split(": ")
         if len(cols) != 2:
@@ -178,15 +178,25 @@ class Server:
         error: dict
             error if occured or None,
             error object contain 'error code' and 'message'"""
-        if method == "test_conn":
+        if method == "initialize":
             # for testing connection purpose. return all received data
-            return params
+            result,err = self.initialize(params)
+            return result,err
 
         elif method == "textDocument/completion":
             result, err = self.complete(params)
             return result, {"code": ErrorCodes.InternalError, "message": err}
         else:
             return None, {"code": ErrorCodes.MethodNotFound, "message": method}
+
+    def initialize(self, params) -> (any, any):
+        ServerCapabilities = {}
+        ServerCapabilities["capability"] = {"completionProvider":{"resolveProvider":True}}
+        return {"capabilities":ServerCapabilities}, {"retry":False}
+
+    def exit(self, params) -> (any,any):
+        self._run_forever = False
+        return None, {"code": 0}
 
     def complete(self, params) -> (any, any):
         """Do complete

@@ -18,7 +18,7 @@ def pack(content: str) -> bytes:
         bytes binary data"""
 
     cnt = content.encode("utf-8")
-    head = f"Content-Length: {len(cnt)}\r\n\r\n"
+    head = "Content-Length: {}\r\n\r\n".format(len(cnt))
     return head.encode("ascii")+cnt
 
 
@@ -49,7 +49,7 @@ def unpack(raw: bytes) -> (any, any):
     head_l = head.split("\r\n")
     if len(head_l) == 0:
         return "", "head not assigned"
-    cnt_len: int = 0
+    cnt_len = 0
     for row in head_l:
         cols = row.split(": ")
         if len(cols) != 2:
@@ -81,10 +81,13 @@ class Client:
         self.python = python
         self.env = env
         self._run_server = kwargs.get("run_server", True)
-        self._server_running = False
+        # self._server_running = False
         self._server_error = False
         self.req_id = 0
         self._server_activate_retry = 0
+        
+        # Service block ------------------
+        self.completion_capable = False
 
     def run_server(self):
         def get_server():
@@ -160,8 +163,8 @@ class Client:
         if not self._run_server:
             return
         # run server if not running
-        if self._server_running:
-            return
+        # if self._server_running:
+        #     return
         # prevent run if server broken
         if self._server_activate_retry < 5:
             if not self._server_error:
@@ -187,6 +190,9 @@ class Client:
                     else:
                         return
                 else: 
+                    if method == "exit":
+                        if err["code"] == 0:
+                            self.terminate_all_services()
                     return
             result = json.loads(result)
             print(result)
@@ -197,13 +203,31 @@ class Client:
         except (KeyError, ValueError):
             return None
 
+    def terminate_all_services(self):
+        self.completion_capable = False
+
     def test_conn(self, message=""):
         result, err = self._request(message)
         if err:
             return err
         return result
 
+    def initialize(self):
+        try:
+            result = self.request("initialize")
+            self.completion_capable = result["capabilities"]["capability"]["completionProvider"]["resolveProvider"]
+        except(ValueError,KeyError,TypeError):
+            pass
+
+    def exit(self):
+        try:
+            result = self.request("exit")            
+        except(ValueError,KeyError,TypeError):
+            pass
+
     def complete(self, source, line, character):
+        if not self.completion_capable:
+            return None
         params = {"textDocument": {"uri": source}, "position": {
             "line": line, "character": character}}
         result = self.request("textDocument/completion", params)
