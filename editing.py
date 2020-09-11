@@ -76,25 +76,36 @@ class PytoolsFormatCommand(sublime_plugin.TextCommand):
                 i += l
 
 
-class Jedi(sublime_plugin.EventListener):
+class Pytools(sublime_plugin.EventListener):
     def __init__(self):
         self.completions = None
-        self.client = None
+        self.lsp_client = None
+        self.lsp_process = False
 
+    def init_lsp_client(self):
+        python = load_settings("python")
+        env = get_sysenv()
+        self.lsp_client = Client(python=python,env=env)
+        self.lsp_client.initialize()
 
     def fetch_completions(self, view, prefix, locations):        
         cursor = locations[0]
         src = view.substr(sublime.Region(0, cursor))
         row, col = view.rowcol(cursor)
 
-        if not self.client:
+        if not self.lsp_client:
             return
-        raw_completion = self.client.complete(src,row,col)
+        raw_completion = self.lsp_client.complete(src,row,col)
+        # print("->>",raw_completion)
         completions = completion.format_code(raw_completion)
+        # print("<<-",completions)
         # print(repr(completions))
         if completions:
             self.completions = completions
-        self.open_query_completions(view)
+            self.open_query_completions(view)
+
+        # release lock
+        self.lsp_process = False
 
     def open_query_completions(self, view):
         """Opens (forced) the sublime autocomplete window"""
@@ -128,14 +139,16 @@ class Jedi(sublime_plugin.EventListener):
 
         if self.completions:
             completions = self.completions
+            # print("--->",completions)
             self.completions = None
             return (completions, sublime.INHIBIT_WORD_COMPLETIONS)
 
-        if not self.client:
-            python = load_settings("python")
-            env = get_sysenv()
-            self.client = Client(python=python,env=env)
-            self.client.initialize()
+        # prevent call multiple process
+        self.lsp_process = True
+
+        if not self.lsp_client:
+            self.init_lsp_client()
+            return
 
         thread = threading.Thread(
             target=self.fetch_completions, args=(view, prefix, locations))

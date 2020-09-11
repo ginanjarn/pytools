@@ -176,6 +176,7 @@ class Client:
 
     def request(self, method, params=None) -> any:
         try:
+            # print(self.req_id)
             msg = {"jsonrpc": "2.0", "id": self.req_id,
                    "method": method, "params": params}
 
@@ -195,7 +196,7 @@ class Client:
                             self.terminate_all_services()
                     return
             result = json.loads(result)
-            print(result)
+            # print(result)
             if result["id"] != self.req_id:
                 return
             self.req_id += 1
@@ -221,7 +222,7 @@ class Client:
 
     def exit(self):
         try:
-            result = self.request("exit")            
+            self.request("exit")            
         except(ValueError,KeyError,TypeError):
             pass
 

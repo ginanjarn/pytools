@@ -185,7 +185,9 @@ class Server:
 
         elif method == "textDocument/completion":
             result, err = self.complete(params)
-            return result, {"code": ErrorCodes.InternalError, "message": err}
+            if err:
+                {"code": ErrorCodes.InternalError, "message": err}
+            return result, None
         else:
             return None, {"code": ErrorCodes.MethodNotFound, "message": method}
 
@@ -216,7 +218,10 @@ class Server:
             line += 1
             character = params["position"]["character"]
             s = Completion(src)
-            return s.complete(line, character)
+            result, err = s.complete(line,character)
+            if err:
+                return None,err
+            return result, None
         except ValueError as e:
             return None, str(e)
 
