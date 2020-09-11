@@ -3,6 +3,7 @@ import json
 import os
 import subprocess
 import time
+import threading
 
 
 def pack(content: str) -> bytes:
@@ -101,11 +102,17 @@ class Client:
             # so only use it if on Windows
             si = subprocess.STARTUPINFO()
             si.dwFlags |= subprocess.SW_HIDE | subprocess.STARTF_USESHOWWINDOW
-            subprocess.Popen(run_server_cmd, shell=True,
+            server_proc = subprocess.call(run_server_cmd, shell=True,
                              env=self.env, startupinfo=si)
         else:
-            subprocess.Popen(run_server_cmd, shell=True, env=self.env)
+            server_proc = subprocess.call(run_server_cmd, shell=True, env=self.env)
             # pass
+
+        print(server_proc)
+        if server_proc != 0:
+            self._server_error = True
+            return
+        
         self._server_activate_retry += 1
 
     def _request(self, content: str) -> (str, any):
@@ -169,7 +176,10 @@ class Client:
         if self._server_activate_retry < 5:
             if not self._server_error:
                 # running server
-                self.run_server()
+                # self.run_server()
+                thread = threading.Thread(target=self.run_server)
+                thread.setDaemon(True)
+                thread.start()
         else:
             # counter >= 5  ---> server broken
             self._server_error = True
