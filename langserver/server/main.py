@@ -1,7 +1,7 @@
 import socket
 import json
 import argparse
-from service.completion import Completion, jedi_error  # pylint: disable=import-error
+from service.completion import Completion, completion_error  # pylint: disable=import-error
 
 
 def pack(content: str) -> bytes:
@@ -193,7 +193,8 @@ class Server:
 
     def initialize(self, params) -> (any, any):
         ServerCapabilities = {}
-        ServerCapabilities["capability"] = {"completionProvider":{"resolveProvider":True}}
+        if not completion_error:
+            ServerCapabilities["capability"] = {"completionProvider":{"resolveProvider":True}}
         return {"capabilities":ServerCapabilities}, {"retry":False}
 
     def exit(self, params) -> (any,any):

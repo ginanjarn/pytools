@@ -1,8 +1,8 @@
-jedi_error = None
+completion_error = None
 try:
 	from jedi import Script
 except ModuleNotFoundError:
-	module_error = "jedi"
+	completion_error = "jedi"
 
 class Completion:
 	def __init__(self,source):
