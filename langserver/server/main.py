@@ -192,6 +192,11 @@ class Server:
             if err:
                 {"code": ErrorCodes.InternalError, "message": err}
             return result, None
+        elif method == "textDocument/hover":
+            result, err = self.hover(params)
+            if err:
+                {"code": ErrorCodes.InternalError, "message": err}
+            return result, None
         else:
             return None, {"code": ErrorCodes.MethodNotFound, "message": "method not found : {}".format(method)}
 

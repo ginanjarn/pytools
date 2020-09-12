@@ -13,7 +13,7 @@ class Hover:
 			result = c.help(line,character)
 			# print(result)
 			if len(result) <= 0:
-				return
+				return None, None
 			prebuit_doc = self.build_html_layout(result[0])
 			ret = {"contents":{"language":"html","value":prebuit_doc}}
 			return ret, None
@@ -24,7 +24,7 @@ class Hover:
 		type_ = data.type
 		name = data.name
 		if type_ == "keyword":
-			return "<code>{} : {}</>".format(type_,name)
+			return "<code>{} : {}</code>".format(type_,name)
 			
 		definition = "{}:{}:{}".format(data.module_path,data.line,data.column)
 		doc = data.docstring()

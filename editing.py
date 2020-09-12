@@ -6,7 +6,7 @@ import threading
 import os
 # from .completion.client import Client
 from .langserver.client.service import Client # pylint: disable=import-error
-from .langserver.client.sublimetext import completion # pylint: disable=import-error
+from .langserver.client.sublimetext import completion, hover # pylint: disable=import-error
 
 
 def load_settings(key):
@@ -158,24 +158,37 @@ class Pytools(sublime_plugin.EventListener):
 
     def fetch_help(self,view,point):
         word_region = view.word(point)
+        print(word_region)
+        word = view.substr(word_region)
+        if word.startswith(" "):
+            self.lsp_process = False
+            return
+        print(view.substr(word_region))
         src = view.substr(sublime.Region(0, word_region.b))
         line, col = view.rowcol(point)
         # print(src)
-        # help_data, err = self.lsp_client.hover(src,line,col)
+        raw_help = self.lsp_client.hover(src,line,col)
+        print(raw_help)
+        help_data = hover.format_code(raw_help)
+        print(help_data)
+        hover.show_popup(view=view,content=help_data,location=point)
         # if err:
         #     print(err)
         #     return
-        print(help_data)
+        # print(help_data)
         self.lsp_process = False
 
     def on_hover(self, view, point, hover_zone):
         if hover_zone == sublime.HOVER_TEXT:
+            # print(point)
+            # print(view.word(point))
+            # print(view.substr(view.word(point)))
             self.lsp_process = True
             if not self.lsp_client:
                 self.init_lsp_client()
                 return
 
             thread = threading.Thread(target=self.fetch_help,args=(view,point))
-            # thread.start()
+            thread.start()
         else:
             return
