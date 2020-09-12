@@ -86,7 +86,7 @@ class Pytools(sublime_plugin.EventListener):
         python = load_settings("python")
         env = get_sysenv()
         self.lsp_client = Client(python=python,env=env)
-        self.lsp_client.initialize()
+        # self.lsp_client.initialize()
         thread = threading.Thread(target=self.lsp_client.initialize)
         thread.start()
 
