@@ -43,14 +43,14 @@ def unpack(raw: bytes) -> (any, any):
     content: str
         string content result, or None if content overflow
     error: any
-        error message if occured"""
+        error message if occured, or None"""
     raw_l = raw.decode("ascii").split("\r\n\r\n")
     if len(raw_l) != 2:
-        return "", "invalid raw"
+        return "", Encoding.InvalidData
     head = raw_l[0]
     head_l = head.split("\r\n")
     if len(head_l) == 0:
-        return "", "head not assigned"
+        return "", Encoding.HeaderEmpty
     cnt_len = 0
     for row in head_l:
         cols = row.split(": ")
@@ -61,9 +61,9 @@ def unpack(raw: bytes) -> (any, any):
             break
     body = raw_l[1]
     if len(body) < cnt_len:
-        return "", "content not valid"
+        return "", Encoding.ContentIncomplete
     elif len(body) > cnt_len:
-        return None, "content overflow"
+        return None, Encoding.ContentOverflow
     else:
         return body, None
 

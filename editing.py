@@ -5,8 +5,8 @@ import subprocess
 import threading
 import os
 # from .completion.client import Client
-from .langserver.client.service import Client # pylint: disable=import-error
-from .langserver.client.sublimetext import completion, hover # pylint: disable=import-error
+from .langserver.client.service import Client # pylint: disable=relative-beyond-top-level
+from .langserver.client.sublimetext import completion, hover # pylint: disable=relative-beyond-top-level
 
 
 def load_settings(key):
