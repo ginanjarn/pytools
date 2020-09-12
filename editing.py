@@ -87,6 +87,8 @@ class Pytools(sublime_plugin.EventListener):
         env = get_sysenv()
         self.lsp_client = Client(python=python,env=env)
         self.lsp_client.initialize()
+        thread = threading.Thread(target=self.lsp_client.initialize)
+        thread.start()
 
     def fetch_completions(self, view, prefix, locations):        
         cursor = locations[0]
@@ -154,4 +156,26 @@ class Pytools(sublime_plugin.EventListener):
             target=self.fetch_completions, args=(view, prefix, locations))
         thread.start()
 
+    def fetch_help(self,view,point):
+        word_region = view.word(point)
+        src = view.substr(sublime.Region(0, word_region.b))
+        line, col = view.rowcol(point)
+        # print(src)
+        # help_data, err = self.lsp_client.hover(src,line,col)
+        # if err:
+        #     print(err)
+        #     return
+        print(help_data)
+        self.lsp_process = False
 
+    def on_hover(self, view, point, hover_zone):
+        if hover_zone == sublime.HOVER_TEXT:
+            self.lsp_process = True
+            if not self.lsp_client:
+                self.init_lsp_client()
+                return
+
+            thread = threading.Thread(target=self.fetch_help,args=(view,point))
+            # thread.start()
+        else:
+            return
