@@ -110,7 +110,7 @@ class Client:
             server_proc = subprocess.call(run_server_cmd, shell=True, env=self.env)
             # pass
 
-        print(server_proc)
+        # print(server_proc)
         if server_proc != 0:
             self._server_error = True
             return
@@ -219,7 +219,7 @@ class Client:
                     else:
                         return
             result = json.loads(result)
-            print(result)
+            # print(result)
             # if result["id"] != self.req_id:
             if result["id"] != req_id:
                 print("invalid response id. want {} ->> {}".format(req_id,result["id"]))

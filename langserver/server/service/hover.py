@@ -26,7 +26,8 @@ class Hover:
 		if type_ == "keyword":
 			return "<code>{} : {}</code>".format(type_,name)
 			
-		definition = "{}:{}:{}".format(data.module_path,data.line,data.column)
+		module_path = data.module_path if data.module_path else ""
+		definition = "{}:{}:{}".format(module_path,data.line,data.column)
 		doc = data.docstring()
 
 		head = "<code>{} : <a href=\"{}\">{}</a></code>".format(type_, definition, name)

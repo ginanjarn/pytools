@@ -158,7 +158,7 @@ class Pytools(sublime_plugin.EventListener):
 
     def fetch_help(self,view,point):
         word_region = view.word(point)
-        print(word_region)
+        # print(word_region)
         word = view.substr(word_region)
         if word.startswith(" "):
             self.lsp_process = False
@@ -168,14 +168,10 @@ class Pytools(sublime_plugin.EventListener):
         line, col = view.rowcol(point)
         # print(src)
         raw_help = self.lsp_client.hover(src,line,col)
-        print(raw_help)
+        # print(raw_help)
         help_data = hover.format_code(raw_help)
-        print(help_data)
-        hover.show_popup(view=view,content=help_data,location=point)
-        # if err:
-        #     print(err)
-        #     return
         # print(help_data)
+        hover.show_popup(view=view,content=help_data,location=point)
         self.lsp_process = False
 
     def on_hover(self, view, point, hover_zone):
