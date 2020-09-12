@@ -4,6 +4,7 @@ import os
 import subprocess
 import time
 import threading
+import random
 
 
 def pack(content: str) -> bytes:
@@ -84,11 +85,12 @@ class Client:
         self._run_server = kwargs.get("run_server", True)
         # self._server_running = False
         self._server_error = False
-        self.req_id = 0
+        # self.req_id = 0
         self._server_activate_retry = 0
         
         # Service block ------------------
         self.completion_capable = False
+        self.hover_capable = False
 
     def run_server(self):
         def get_server():
@@ -187,35 +189,49 @@ class Client:
     def request(self, method, params=None) -> any:
         try:
             # print(self.req_id)
-            msg = {"jsonrpc": "2.0", "id": self.req_id,
+            req_id = str(random.random())
+            # msg = {"jsonrpc": "2.0", "id": self.req_id,
+            msg = {"jsonrpc": "2.0", "id": req_id,
                    "method": method, "params": params}
 
             msg_str = json.dumps(msg)
             result, err = self._request(msg_str)
             if err:
                 if err == ErrorCodes.serverErrorStart:
+                    # bypass if server not running
+                    if method == "exit":
+                        self.terminate_all_services()
+                        return
+                    
                     if not self._server_error:
                         self.try_running_server()
                         time.sleep(2)
                         result, err = self._request(msg_str)
                     else:
                         return
-                else: 
+                else:
+                    # terminate on success terminate server
                     if method == "exit":
                         if err["code"] == 0:
                             self.terminate_all_services()
-                    return
+                    elif method == "initialize":
+                        pass
+                    else:
+                        return
             result = json.loads(result)
-            # print(result)
-            if result["id"] != self.req_id:
+            print(result)
+            # if result["id"] != self.req_id:
+            if result["id"] != req_id:
+                print("invalid response id. want {} ->> {}".format(req_id,result["id"]))
                 return
-            self.req_id += 1
+            # self.req_id += 1
             return result["results"]
         except (KeyError, ValueError):
             return None
 
     def terminate_all_services(self):
         self.completion_capable = False
+        self.hover_capable = False
 
     def test_conn(self, message=""):
         result, err = self._request(message)
@@ -226,7 +242,9 @@ class Client:
     def initialize(self):
         try:
             result = self.request("initialize")
+            # print(result)
             self.completion_capable = result["capabilities"]["capability"]["completionProvider"]["resolveProvider"]
+            self.hover_capable = result["capabilities"]["capability"]["hoverProvider"]
         except(ValueError,KeyError,TypeError):
             pass
 
@@ -242,6 +260,16 @@ class Client:
         params = {"textDocument": {"uri": source}, "position": {
             "line": line, "character": character}}
         result = self.request("textDocument/completion", params)
+        if not result:
+            return None
+        return result
+
+    def hover(self, source, line, character):
+        if not self.completion_capable:
+            return None
+        params = {"textDocument": {"uri": source}, "position": {
+            "line": line, "character": character}}
+        result = self.request("textDocument/hover", params)
         if not result:
             return None
         return result

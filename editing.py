@@ -1,12 +1,12 @@
-import sublime
-import sublime_plugin
+import sublime # pylint: disable=import-error
+import sublime_plugin # pylint: disable=import-error
 import difflib
 import subprocess
 import threading
 import os
 # from .completion.client import Client
-from .langserver.client.service import Client
-from .langserver.client.sublimetext import completion
+from .langserver.client.service import Client # pylint: disable=import-error
+from .langserver.client.sublimetext import completion # pylint: disable=import-error
 
 
 def load_settings(key):

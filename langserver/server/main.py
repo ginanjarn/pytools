@@ -2,6 +2,7 @@ import socket
 import json
 import argparse
 from service.completion import Completion, completion_error  # pylint: disable=import-error
+from service.hover import Hover, hover_error  # pylint: disable=import-error
 
 
 def pack(content: str) -> bytes:
@@ -179,8 +180,11 @@ class Server:
             error if occured or None,
             error object contain 'error code' and 'message'"""
         if method == "initialize":
-            # for testing connection purpose. return all received data
             result,err = self.initialize(params)
+            return result,err
+        
+        elif method == "exit":
+            result,err = self.exit(params)
             return result,err
 
         elif method == "textDocument/completion":
@@ -189,12 +193,16 @@ class Server:
                 {"code": ErrorCodes.InternalError, "message": err}
             return result, None
         else:
-            return None, {"code": ErrorCodes.MethodNotFound, "message": method}
+            return None, {"code": ErrorCodes.MethodNotFound, "message": "method not found : {}".format(method)}
 
-    def initialize(self, params) -> (any, any):
-        ServerCapabilities = {}
+    def initialize(self, params) -> (any, any):        
+        capability = {}
         if not completion_error:
-            ServerCapabilities["capability"] = {"completionProvider":{"resolveProvider":True}}
+            capability["completionProvider"]={"resolveProvider":True}
+        if not hover_error:
+            capability["hoverProvider"]=True
+
+        ServerCapabilities = {"capability":capability}
         return {"capabilities":ServerCapabilities}, {"retry":False}
 
     def exit(self, params) -> (any,any):
@@ -225,6 +233,31 @@ class Server:
             return result, None
         except ValueError as e:
             return None, str(e)
+
+    def hover(self,params) -> (any,any):
+        """Do hover
+        Params
+        ------
+        params
+            HoverParams
+        Returns:
+        -------
+        result: dict
+            documentation formatted with spcific output language
+        error"""
+        try:
+            src = params["textDocument"]["uri"]
+            line = params["position"]["line"]
+            # jedi line is one based
+            line += 1
+            character = params["position"]["character"]
+            h = Hover(src)
+            result, err = h.hover(line,character)
+            if err:
+                return None, err
+            return result, None
+        except ValueError as e:
+            return None,str(e)
 
 
 if __name__ == '__main__':
