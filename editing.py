@@ -160,12 +160,11 @@ class Pytools(sublime_plugin.EventListener):
 
     def fetch_help(self,view,point):
         word_region = view.word(point)
-        # print(word_region)
         word = view.substr(word_region)
-        if word.startswith(" "):
+        if point == word_region.b:
             self.lsp_process = False
+            view.erase_status("lsp_process")
             return
-        print(view.substr(word_region))
         src = view.substr(sublime.Region(0, word_region.b))
         line, col = view.rowcol(point)
         # print(src)
@@ -186,6 +185,7 @@ class Pytools(sublime_plugin.EventListener):
             view.set_status("lsp_process","🔄 Documentation")
             if not self.lsp_client:
                 self.init_lsp_client()
+                view.erase_status("lsp_process")
                 return
 
             thread = threading.Thread(target=self.fetch_help,args=(view,point))
