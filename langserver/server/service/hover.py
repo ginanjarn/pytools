@@ -34,7 +34,7 @@ class Hover:
 
 		doc_lines = doc.split("\n")
 		title = doc_lines[0]
-		title = "<h3>{}</h3>".format(title)
+		title = "<h4>{}</h4>".format(title)
 		body = doc_lines[1:]
 		wrap_p = lambda line: "<p>{}</p>".format(line)
 		body = [wrap_p(line) for line in body]
