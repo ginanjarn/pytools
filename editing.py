@@ -108,6 +108,7 @@ class Pytools(sublime_plugin.EventListener):
 
         # release lock
         self.lsp_process = False
+        view.erase_status("lsp_process")
 
     def open_query_completions(self, view):
         """Opens (forced) the sublime autocomplete window"""
@@ -147,6 +148,7 @@ class Pytools(sublime_plugin.EventListener):
 
         # prevent call multiple process
         self.lsp_process = True
+        view.set_status("lsp_process","🔄 Completing")
 
         if not self.lsp_client:
             self.init_lsp_client()
@@ -173,6 +175,7 @@ class Pytools(sublime_plugin.EventListener):
         # print(help_data)
         hover.show_popup(view=view,content=help_data,location=point)
         self.lsp_process = False
+        view.erase_status("lsp_process")
 
     def on_hover(self, view, point, hover_zone):
         if hover_zone == sublime.HOVER_TEXT:
@@ -180,6 +183,7 @@ class Pytools(sublime_plugin.EventListener):
             # print(view.word(point))
             # print(view.substr(view.word(point)))
             self.lsp_process = True
+            view.set_status("lsp_process","🔄 Documentation")
             if not self.lsp_client:
                 self.init_lsp_client()
                 return
