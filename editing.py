@@ -6,7 +6,7 @@ import threading
 import os
 # from .completion.client import Client
 from .langserver.client.service import Client # pylint: disable=relative-beyond-top-level
-from .langserver.client.sublimetext import completion, hover # pylint: disable=relative-beyond-top-level
+from .langserver.client.sublimetext import completion, hover, formatting # pylint: disable=relative-beyond-top-level
 
 
 def load_settings(key):
@@ -27,53 +27,30 @@ def diff_sanity_check(a, b):
 
 
 class PytoolsFormatCommand(sublime_plugin.TextCommand):
+    def __init__(self):
+        self.lsp_client = None
+
     def run(self, edit):
         view = self.view
         src = view.substr(sublime.Region(0, view.size()))
-        fmt_env = get_sysenv()
-
-        try:
-            fmt_process_cmd = ["autopep8", "-"]
-
-            if os.name == "nt":
-                # linux subprocess module does not have STARTUPINFO
-                # so only use it if on Windows
-                si = subprocess.STARTUPINFO()
-                si.dwFlags |= subprocess.SW_HIDE | subprocess.STARTF_USESHOWWINDOW
-                fmt_proc = subprocess.Popen(fmt_process_cmd,shell=True,
-                                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=fmt_env, startupinfo=si, bufsize=-1)
-            else:
-                fmt_proc = subprocess.Popen(fmt_process_cmd,shell=True,
-                                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=fmt_env, bufsize=-1)
-
-            sout,serr = fmt_proc.communicate(src.encode())
-        except BrokenPipeError:
-            print("autopep8 not found in PATH")
+        if not self.lsp_client:
+            self.init_lsp_client()
+        result, err = self.lsp_client.formatting(src)
+        if err:
+            view.set_status("lsp_process","❌ Formatting error")
             return
+        view.erase_status("lsp_process")
+        formatting.update_edit(view,edit,result)
 
-        if fmt_proc.returncode != 0:
-            print(serr.decode(), end="")
-            return
+    def init_lsp_client(self):
+        python = load_settings("python")
+        env = get_sysenv()
+        self.lsp_client = Client(python=python,env=env)
+        # self.lsp_client.initialize()
+        thread = threading.Thread(target=self.lsp_client.initialize)
+        thread.start()
 
-        newsrc = sout.decode()
-        diff = difflib.ndiff(src.splitlines(), newsrc.splitlines())
-        i = 0
-        for line in diff:
-            if line.startswith("?"):  # skip hint lines
-                continue
-
-            l = (len(line)-2)+1
-            if line.startswith("-"):
-                diff_sanity_check(view.substr(
-                    sublime.Region(i, i+l-1)), line[2:])
-                view.erase(edit, sublime.Region(i, i+l))
-            elif line.startswith("+"):
-                view.insert(edit, i, line[2:]+"\n")
-                i += l
-            else:
-                diff_sanity_check(view.substr(
-                    sublime.Region(i, i+l-1)), line[2:])
-                i += l
+        
 
 
 class Pytools(sublime_plugin.EventListener):

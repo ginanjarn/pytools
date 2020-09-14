@@ -245,6 +245,7 @@ class Client:
             # print(result)
             self.completion_capable = result["capabilities"]["capability"]["completionProvider"]["resolveProvider"]
             self.hover_capable = result["capabilities"]["capability"]["hoverProvider"]
+            self.document_formatting_capable = result["capabilities"]["capability"]["documentFormattingProvider"]
         except(ValueError,KeyError,TypeError):
             pass
 
@@ -270,6 +271,15 @@ class Client:
         params = {"textDocument": {"uri": source}, "position": {
             "line": line, "character": character}}
         result = self.request("textDocument/hover", params)
+        if not result:
+            return None
+        return result
+
+    def formatting(self, source):
+        if not self.document_formatting_capable:
+            return None
+        params = {"textDocument": {"uri": source}}
+        result = self.request("textDocument/formatting", params)
         if not result:
             return None
         return result
