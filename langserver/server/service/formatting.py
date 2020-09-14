@@ -28,8 +28,18 @@ class Formatting:
         sub, add = mark_list[1], mark_list[2]  # ["-25,6","+25,7"]
         sub, add = sub[1:], add[1:]  # ["25,6","25,7"]
         sub, add = sub.split(","), add.split(",")  # [("25","6"),("25","7")]
-        sub_start, sub_end = int(sub[0]), int(sub[1])   # (25,6))
-        add_start, add_end = int(add[0]), int(add[1])   # (25,7)
+        if len(sub) == 1:
+            sub_start, sub_end = int(sub[0]), 1   # (25,0)
+        elif len(sub) == 2:
+            sub_start, sub_end = int(sub[0]), int(sub[1])   # (25,6)
+        else:
+            raise Exception("error parsing diff identifier")
+        if len(add) == 1:
+            add_start, add_end = int(add[0]), 1   # (25,0)
+        elif len(add) == 2:
+            add_start, add_end = int(add[0]), int(add[1])   # (25,7)
+        else:
+            raise Exception("error parsing diff identifier")
         return (sub_start, sub_end), (add_start, add_end)   # (25,6),(25,7)
 
     def extract_updated(self, old_src, new_src) -> any:

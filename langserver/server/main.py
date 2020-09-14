@@ -279,6 +279,7 @@ class Server:
             result, err = f.format_code()
             if err:
                 return None, err
+            return result, None
         except ValueError as e:
             return None, str(e)
 

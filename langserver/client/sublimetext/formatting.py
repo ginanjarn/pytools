@@ -1,4 +1,5 @@
 import sublime
+
 def update_edit(view,edit,new_values):
 	for val in new_values:
 		start_point = view.text_point(val["start"]["line"],val["start"]["character"])

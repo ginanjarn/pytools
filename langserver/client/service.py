@@ -91,6 +91,7 @@ class Client:
         # Service block ------------------
         self.completion_capable = False
         self.hover_capable = False
+        self.document_formatting_capable = False
 
     def run_server(self):
         def get_server():
@@ -232,6 +233,7 @@ class Client:
     def terminate_all_services(self):
         self.completion_capable = False
         self.hover_capable = False
+        self.document_formatting_capable = False
 
     def test_conn(self, message=""):
         result, err = self._request(message)

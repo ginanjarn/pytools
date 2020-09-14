@@ -40,14 +40,14 @@ class ServiceTest(unittest.TestCase):
     #     c.exit()
     #     self.assertEqual(want, expect, "test connection")
 
-    def test_exit_server(self):
+    # def test_exit_server(self):
         # c = Client(run_server=True)
         # time.sleep(3)
         # c.initialize()
         # c.exit()
-        c = Client(run_server=False)
+        # c = Client(run_server=False)
         # c.initialize()
-        c.exit()
+        # c.exit()
 
     # def test_client_completion(self):
     #     # subprocess.Popen(["python", get_server(), "--test"])
@@ -88,6 +88,11 @@ class ServiceTest(unittest.TestCase):
     #     expect = c.hover("from sklearn.datasets import load_iris",0,9)
     #     c.exit()
     #     self.assertEqual(want, expect, "test hover")
+
+    def test_client_formatting(self):
+        c = Client()
+        c.initialize()
+        print(c.formatting("x,y=12,8"))
 
 
 if __name__ == '__main__':
