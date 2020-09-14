@@ -3,6 +3,7 @@ import json
 import argparse
 from service.completion import Completion, completion_error  # pylint: disable=import-error
 from service.hover import Hover, hover_error  # pylint: disable=import-error
+from service.formatting import Formatting, formatting_error  # pylint: disable=import-error
 
 
 def pack(content: str) -> bytes:
@@ -197,6 +198,11 @@ class Server:
             if err:
                 {"code": ErrorCodes.InternalError, "message": err}
             return result, None
+        elif method == "textDocument/formatting":
+            result, err = self.formatting(params)
+            if err:
+                {"code": ErrorCodes.InternalError, "message": err}
+            return result, None
         else:
             return None, {"code": ErrorCodes.MethodNotFound, "message": "method not found : {}".format(method)}
 
@@ -206,6 +212,8 @@ class Server:
             capability["completionProvider"]={"resolveProvider":True}
         if not hover_error:
             capability["hoverProvider"]=True
+        if not formatting_error:
+            capability["documentFormattingProvider"]=True
 
         ServerCapabilities = {"capability":capability}
         return {"capabilities":ServerCapabilities}, {"retry":False}
@@ -263,6 +271,16 @@ class Server:
             return result, None
         except ValueError as e:
             return None,str(e)
+
+    def formatting(self,params):
+        try:
+            src = params["textDocument"]["uri"]
+            f = Formatting(src)
+            result, err = f.format_code()
+            if err:
+                return None, err
+        except ValueError as e:
+            return None, str(e)
 
 
 if __name__ == '__main__':
