@@ -1,12 +1,12 @@
-import sublime # pylint: disable=import-error
-import sublime_plugin # pylint: disable=import-error
+import sublime  # pylint: disable=import-error
+import sublime_plugin  # pylint: disable=import-error
 import difflib
 import subprocess
 import threading
 import os
 # from .completion.client import Client
-from .langserver.client.service import Client # pylint: disable=relative-beyond-top-level
-from .langserver.client.sublimetext import completion, hover, formatting # pylint: disable=relative-beyond-top-level
+from .langserver.client.service import Client  # pylint: disable=relative-beyond-top-level
+from .langserver.client.sublimetext import completion, hover, formatting  # pylint: disable=relative-beyond-top-level
 
 
 def load_settings(key):
@@ -25,12 +25,20 @@ class PytoolsFormatCommand(sublime_plugin.TextCommand):
     def run(self, edit):
         view = self.view
         src = view.substr(sublime.Region(0, view.size()))
+
+        if not view.match_selector(0, "source.python"):
+            return
+
+        view.set_status("lsp_process", "🔄 Formatting")
+
         python = load_settings("python")
         env = get_sysenv()
-        lsp_client = Client(python=python,env=env)
+        lsp_client = Client(python=python, env=env)
         lsp_client.initialize()
         result = lsp_client.formatting(src)
-        
+        if not result:
+            result = lsp_client.formatting(src)
+        formatting.update_edit(view, edit, result)
 
 
 class Pytools(sublime_plugin.EventListener):
@@ -42,19 +50,19 @@ class Pytools(sublime_plugin.EventListener):
     def init_lsp_client(self):
         python = load_settings("python")
         env = get_sysenv()
-        self.lsp_client = Client(python=python,env=env)
+        self.lsp_client = Client(python=python, env=env)
         # self.lsp_client.initialize()
         thread = threading.Thread(target=self.lsp_client.initialize)
         thread.start()
 
-    def fetch_completions(self, view, prefix, locations):        
+    def fetch_completions(self, view, prefix, locations):
         cursor = locations[0]
         src = view.substr(sublime.Region(0, cursor))
         row, col = view.rowcol(cursor)
 
         if not self.lsp_client:
             return
-        raw_completion = self.lsp_client.complete(src,row,col)
+        raw_completion = self.lsp_client.complete(src, row, col)
         # print("->>",raw_completion)
         completions = completion.format_code(raw_completion)
         # print("<<-",completions)
@@ -105,7 +113,7 @@ class Pytools(sublime_plugin.EventListener):
 
         # prevent call multiple process
         self.lsp_process = True
-        view.set_status("lsp_process","🔄 Completing")
+        view.set_status("lsp_process", "🔄 Completing")
 
         if not self.lsp_client:
             self.init_lsp_client()
@@ -115,7 +123,7 @@ class Pytools(sublime_plugin.EventListener):
             target=self.fetch_completions, args=(view, prefix, locations))
         thread.start()
 
-    def fetch_help(self,view,point):
+    def fetch_help(self, view, point):
         word_region = view.word(point)
         word = view.substr(word_region)
         if point == word_region.b:
@@ -125,27 +133,41 @@ class Pytools(sublime_plugin.EventListener):
         src = view.substr(sublime.Region(0, word_region.b))
         line, col = view.rowcol(point)
         # print(src)
-        raw_help = self.lsp_client.hover(src,line,col)
+        raw_help = self.lsp_client.hover(src, line, col)
         # print(raw_help)
         help_data = hover.format_code(raw_help)
         # print(help_data)
-        hover.show_popup(view=view,content=help_data,location=point)
+        hover.show_popup(view=view, content=help_data, location=point)
         self.lsp_process = False
         view.erase_status("lsp_process")
 
     def on_hover(self, view, point, hover_zone):
+        if not view.match_selector(point, "source.python"):
+            return
+
         if hover_zone == sublime.HOVER_TEXT:
             # print(point)
             # print(view.word(point))
             # print(view.substr(view.word(point)))
             self.lsp_process = True
-            view.set_status("lsp_process","🔄 Documentation")
+            view.set_status("lsp_process", "🔄 Documentation")
             if not self.lsp_client:
                 self.init_lsp_client()
                 view.erase_status("lsp_process")
                 return
 
-            thread = threading.Thread(target=self.fetch_help,args=(view,point))
+            thread = threading.Thread(
+                target=self.fetch_help, args=(view, point))
             thread.start()
         else:
             return
+
+class PytoolsResetserverCommand(sublime_plugin.TextCommand):
+    def run(self, edit):
+        view = self.view
+        src = view.substr(sublime.Region(0, view.size()))
+        python = load_settings("python")
+        env = get_sysenv()
+        lsp_client = Client(python=python, env=env)
+        lsp_client.initialize()
+        lsp_client.exit()
