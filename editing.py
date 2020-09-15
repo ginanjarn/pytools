@@ -21,35 +21,15 @@ def get_sysenv():
     return env
 
 
-def diff_sanity_check(a, b):
-    if a != b:
-        raise Exception("diff sanity check mismatch\n-%s\n+%s" % (a, b))
-
-
 class PytoolsFormatCommand(sublime_plugin.TextCommand):
-    def __init__(self):
-        self.lsp_client = None
-
     def run(self, edit):
         view = self.view
         src = view.substr(sublime.Region(0, view.size()))
-        if not self.lsp_client:
-            self.init_lsp_client()
-        result, err = self.lsp_client.formatting(src)
-        if err:
-            view.set_status("lsp_process","❌ Formatting error")
-            return
-        view.erase_status("lsp_process")
-        formatting.update_edit(view,edit,result)
-
-    def init_lsp_client(self):
         python = load_settings("python")
         env = get_sysenv()
-        self.lsp_client = Client(python=python,env=env)
-        # self.lsp_client.initialize()
-        thread = threading.Thread(target=self.lsp_client.initialize)
-        thread.start()
-
+        lsp_client = Client(python=python,env=env)
+        lsp_client.initialize()
+        result = lsp_client.formatting(src)
         
 
 

@@ -180,6 +180,7 @@ class Server:
         error: dict
             error if occured or None,
             error object contain 'error code' and 'message'"""
+        result, error = None, None
         if method == "initialize":
             result,err = self.initialize(params)
             return result,err
@@ -191,18 +192,18 @@ class Server:
         elif method == "textDocument/completion":
             result, err = self.complete(params)
             if err:
-                {"code": ErrorCodes.InternalError, "message": err}
-            return result, None
+                error = {"code": ErrorCodes.InternalError, "message": err}
+            return result, error
         elif method == "textDocument/hover":
             result, err = self.hover(params)
             if err:
-                {"code": ErrorCodes.InternalError, "message": err}
-            return result, None
+                error = {"code": ErrorCodes.InternalError, "message": err}
+            return result, error
         elif method == "textDocument/formatting":
             result, err = self.formatting(params)
             if err:
-                {"code": ErrorCodes.InternalError, "message": err}
-            return result, None
+                error = {"code": ErrorCodes.InternalError, "message": err}
+            return result, error
         else:
             return None, {"code": ErrorCodes.MethodNotFound, "message": "method not found : {}".format(method)}
 

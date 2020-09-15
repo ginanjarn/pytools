@@ -21,29 +21,32 @@ class Formatting:
             return None, str(e)
 
     def extract_diff_marker(self, mark) -> (any, any):
-        sub_start, sub_end = 0, 0
-        add_start, add_end = 0, 0
+        sub_start, sub_modified = 0, 0
+        add_start, add_modified = 0, 0
         # @@ -25,6 +25,7 @@
         mark_list = mark.split(" ")  # ["@@","-25,6","+25,7","@@"]
         sub, add = mark_list[1], mark_list[2]  # ["-25,6","+25,7"]
         sub, add = sub[1:], add[1:]  # ["25,6","25,7"]
         sub, add = sub.split(","), add.split(",")  # [("25","6"),("25","7")]
         if len(sub) == 1:
-            sub_start, sub_end = int(sub[0]), 1   # (25,0)
+            sub_start, sub_modified = int(sub[0]), 1   # (25,0)
         elif len(sub) == 2:
-            sub_start, sub_end = int(sub[0]), int(sub[1])   # (25,6)
+            sub_start, sub_modified = int(sub[0]), int(sub[1])   # (25,6)
         else:
             raise Exception("error parsing diff identifier")
         if len(add) == 1:
-            add_start, add_end = int(add[0]), 1   # (25,0)
+            add_start, add_modified = int(add[0]), 1   # (25,0)
         elif len(add) == 2:
-            add_start, add_end = int(add[0]), int(add[1])   # (25,7)
+            add_start, add_modified = int(add[0]), int(add[1])   # (25,7)
         else:
             raise Exception("error parsing diff identifier")
-        return (sub_start, sub_end), (add_start, add_end)   # (25,6),(25,7)
+        result = ((sub_start, sub_modified), (add_start, add_modified))   # (25,6),(25,7)
+        return result
 
     def extract_updated(self, old_src, new_src) -> any:
-        diff = difflib.unified_diff(old_src.splitlines(), new_src.splitlines())
+        old_src = old_src.splitlines()
+        new_src = new_src.splitlines()
+        diff = difflib.unified_diff(old_src, new_src)
 
         TextEdit_l = []
         lines = [line for line in diff]
@@ -57,9 +60,9 @@ class Formatting:
                 index += 1
                 TextEdit = {}
                 sub, _ = self.extract_diff_marker(line)
-                start = {"line": sub[0], "character": len(lines[sub[0]])}
+                start = {"line": sub[0], "character": 0}
                 endline = sub[0]+sub[1]-1
-                end = {"line": endline, "character": len(lines[endline])}
+                end = {"line": endline, "character": len(old_src[endline - 1])}
                 TextEdit["range"] = {"start": start, "end": end}
                 TextEdit_l.append(TextEdit)
             elif line.startswith("-"):
