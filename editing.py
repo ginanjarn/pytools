@@ -52,6 +52,7 @@ class Pytools(sublime_plugin.EventListener):
         self.completions = None
         self.lsp_client = None
         self.lsp_process = False
+        self._prefix = ""
 
     def init_lsp_client(self, view):
         python = load_settings("python")
@@ -118,6 +119,12 @@ class Pytools(sublime_plugin.EventListener):
             self.completions = None
             return (completions, sublime.INHIBIT_WORD_COMPLETIONS)
 
+        old_prefix = self._prefix
+        # print(prefix, old_prefix)
+        self._prefix = prefix
+        if prefix.startswith(old_prefix):
+            return
+        # print("completing",prefix)
         # prevent call multiple process
         self.lsp_process = True
         view.set_status("lsp_process", "🔄 Completing")
