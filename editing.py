@@ -40,6 +40,12 @@ class PytoolsFormatCommand(sublime_plugin.TextCommand):
             result = lsp_client.formatting(src)
         formatting.update_edit(view, edit, result)
 
+    def is_visible(self):
+        view = self.view
+        if not view.match_selector(0, "source.python"):
+            return False
+        return True
+
 
 class Pytools(sublime_plugin.EventListener):
     def __init__(self):
@@ -47,9 +53,10 @@ class Pytools(sublime_plugin.EventListener):
         self.lsp_client = None
         self.lsp_process = False
 
-    def init_lsp_client(self):
+    def init_lsp_client(self, view):
         python = load_settings("python")
         env = get_sysenv()
+        env["PYTHONPATH"] = os.pathsep.join(view.window().folders())
         self.lsp_client = Client(python=python, env=env)
         # self.lsp_client.initialize()
         thread = threading.Thread(target=self.lsp_client.initialize)
@@ -116,7 +123,7 @@ class Pytools(sublime_plugin.EventListener):
         view.set_status("lsp_process", "🔄 Completing")
 
         if not self.lsp_client:
-            self.init_lsp_client()
+            self.init_lsp_client(view)
             return
 
         thread = threading.Thread(
@@ -152,7 +159,7 @@ class Pytools(sublime_plugin.EventListener):
             self.lsp_process = True
             view.set_status("lsp_process", "🔄 Documentation")
             if not self.lsp_client:
-                self.init_lsp_client()
+                self.init_lsp_client(view)
                 view.erase_status("lsp_process")
                 return
 
@@ -171,3 +178,9 @@ class PytoolsResetserverCommand(sublime_plugin.TextCommand):
         lsp_client = Client(python=python, env=env)
         lsp_client.initialize()
         lsp_client.exit()
+
+    def is_visible(self):
+        view = self.view
+        if not view.match_selector(0, "source.python"):
+            return False
+        return True

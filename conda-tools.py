@@ -80,6 +80,12 @@ class PytoolsCondasetupCommand(sublime_plugin.TextCommand):
         finally:
             return envs
 
+    def is_visible(self):
+        view = self.view
+        if not view.match_selector(0, "source.python"):
+            return False
+        return True
+
 
 class PytoolsCondaenvsCommand(sublime_plugin.TextCommand):
     def run(self, edit):
@@ -117,4 +123,10 @@ class PytoolsCondaenvsCommand(sublime_plugin.TextCommand):
         save_settings("path", new_paths)
         save_settings("python", python)
         save_settings("conda_active", environment)
-        self.view.run_command("pytools_resetjedi")
+        self.view.run_command("pytools_resetserver")
+
+    def is_visible(self):
+        view = self.view
+        if not view.match_selector(0, "source.python"):
+            return False
+        return True

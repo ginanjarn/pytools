@@ -137,3 +137,9 @@ class PytoolsLintCommand(sublime_plugin.TextCommand):
                          flags=sublime.DRAW_NO_FILL | sublime.DRAW_NO_OUTLINE | sublime.DRAW_SOLID_UNDERLINE)
 
         print_to_outputpane("\n".join(errors))
+
+    def is_visible(self):
+        view = self.view
+        if not view.match_selector(0, "source.python"):
+            return False
+        return True
