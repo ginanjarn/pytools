@@ -1,4 +1,7 @@
 hover_error = None
+
+import html
+
 try:
 	from jedi import Script
 except ModuleNotFoundError:
@@ -29,6 +32,8 @@ class Hover:
 		module_path = data.module_path if data.module_path else ""
 		definition = "{}:{}:{}".format(module_path,data.line,data.column)
 		doc = data.docstring()
+		doc = html.escape(doc,quote=False)
+
 
 		head = "<code>{} : <a href=\"{}\">{}</a></code>".format(type_, definition, name)
 
