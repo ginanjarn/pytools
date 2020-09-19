@@ -4,5 +4,7 @@
 
 	{ "caption": "PyTools: Format Code", "command": "pytools_format" },
 	{ "caption": "PyTools: Lint Code", "command": "pytools_lint" },
-	{ "caption": "PyTools: Reset Jedi", "command": "pytools_resetjedi" },
+	{ "caption": "PyTools: Reset Server", "command": "pytools_resetserver" },
+
+	{ "caption": "PyTools: Bug report", "command": "pytools_bugreport" },
 ]
