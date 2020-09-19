@@ -8,7 +8,7 @@ def goto_definition(view, path_encoded):
         view.window().open_file(module_path, sublime.ENCODED_POSITION)
         
     else:
-        view.window().open_file(path_encoded, sublime.ENCODED_POSITION | sublime.TRANSIENT)
+        view.window().open_file(path_encoded, sublime.ENCODED_POSITION)
 
 
 def show_popup(view, content, location):
@@ -22,6 +22,7 @@ def format_code(source):
     try:
         contents = source["contents"]
         if contents["language"] == "html":
-            return contents["value"]
+            contents_value = "<div style=\"margin:.5em\">{}</div>".format(contents["value"])
+            return contents_value
     except Exception as e:
         return None
