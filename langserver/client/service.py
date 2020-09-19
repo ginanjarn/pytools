@@ -161,6 +161,7 @@ class Client:
                         break
                     else:
                         content = result
+                        print(len(content))
                         break
             return content, error
 
