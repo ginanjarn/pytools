@@ -1,10 +1,12 @@
-import sublime
-import sublime_plugin
+import sublime  # pylint: disable=import-error
+import sublime_plugin  # pylint: disable=import-error
 import difflib
 import subprocess
 import threading
 import os
-from .completion.client import Client
+# from .completion.client import Client
+from .langserver.client.service import Client  # pylint: disable=relative-beyond-top-level
+from .langserver.client.sublimetext import completion, hover, formatting  # pylint: disable=relative-beyond-top-level
 
 
 def load_settings(key):
@@ -19,108 +21,67 @@ def get_sysenv():
     return env
 
 
-def diff_sanity_check(a, b):
-    if a != b:
-        raise Exception("diff sanity check mismatch\n-%s\n+%s" % (a, b))
-
-
 class PytoolsFormatCommand(sublime_plugin.TextCommand):
     def run(self, edit):
         view = self.view
         src = view.substr(sublime.Region(0, view.size()))
-        fmt_env = get_sysenv()
 
-        try:
-            fmt_process_cmd = ["autopep8", "-"]
-
-            if os.name == "nt":
-                # linux subprocess module does not have STARTUPINFO
-                # so only use it if on Windows
-                si = subprocess.STARTUPINFO()
-                si.dwFlags |= subprocess.SW_HIDE | subprocess.STARTF_USESHOWWINDOW
-                fmt_proc = subprocess.Popen(fmt_process_cmd,shell=True,
-                                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=fmt_env, startupinfo=si, bufsize=-1)
-            else:
-                fmt_proc = subprocess.Popen(fmt_process_cmd,shell=True,
-                                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=fmt_env, bufsize=-1)
-
-            sout,serr = fmt_proc.communicate(src.encode())
-        except BrokenPipeError:
-            print("autopep8 not found in PATH")
+        if not view.match_selector(0, "source.python"):
             return
 
-        if fmt_proc.returncode != 0:
-            print(serr.decode(), end="")
-            return
+        view.set_status("lsp_process", "🔄 Formatting")
 
-        newsrc = sout.decode()
-        diff = difflib.ndiff(src.splitlines(), newsrc.splitlines())
-        i = 0
-        for line in diff:
-            if line.startswith("?"):  # skip hint lines
-                continue
+        python = load_settings("python")
+        env = get_sysenv()
+        lsp_client = Client(python=python, env=env)
+        lsp_client.initialize()
+        result = lsp_client.formatting(src)
+        if not result:
+            result = lsp_client.formatting(src)
+        formatting.update_edit(view, edit, result)
 
-            l = (len(line)-2)+1
-            if line.startswith("-"):
-                diff_sanity_check(view.substr(
-                    sublime.Region(i, i+l-1)), line[2:])
-                view.erase(edit, sublime.Region(i, i+l))
-            elif line.startswith("+"):
-                view.insert(edit, i, line[2:]+"\n")
-                i += l
-            else:
-                diff_sanity_check(view.substr(
-                    sublime.Region(i, i+l-1)), line[2:])
-                i += l
+    def is_visible(self):
+        view = self.view
+        if not view.match_selector(0, "source.python"):
+            return False
+        return True
 
 
-class Jedi(sublime_plugin.EventListener):
-
+class Pytools(sublime_plugin.EventListener):
     def __init__(self):
         self.completions = None
-        self.python = None
-        self.script = None
-        self.client = None
-        self.cur_env = None
+        self.lsp_client = None
+        self.lsp_process = False
+        self._prefix = ""
 
-    def hint_and_subj(self, name, d_type):
-        hint = "{}\t{}".format(name, d_type)
-        subj = name
-        return hint, subj
-
-    def generate_completions(self, out):
-        results = []
-        for line in out.split("\n"):
-            line = line.strip()
-            arg = line.split(",,")
-            if len(arg) != 2:
-                break
-            hint, subj = self.hint_and_subj(arg[0], arg[1])
-            results.append([hint, subj])
-        return results
+    def init_lsp_client(self, view):
+        python = load_settings("python")
+        env = get_sysenv()
+        env["PATH"] = os.pathsep.join(view.window().folders()) + os.pathsep + env['PATH']
+        self.lsp_client = Client(python=python, env=env)
+        # self.lsp_client.initialize()
+        thread = threading.Thread(target=self.lsp_client.initialize)
+        thread.start()
 
     def fetch_completions(self, view, prefix, locations):
-        python = load_settings("python")
-        if self.python != python:
-            self.python = python
-            self.client = Client(
-                python_path=self.python, script_path=self.script, sys_env=get_sysenv())
-            view.run_command("pytools_resetjedi")
-            return
-        if self.client is None:
-            return
-
-        if self.client.server_error:
-            return
-
         cursor = locations[0]
         src = view.substr(sublime.Region(0, cursor))
-        raw_completion = self.client.complete(src) if self.client else None
+        row, col = view.rowcol(cursor)
 
-        if raw_completion in ("None", None):
+        if not self.lsp_client:
             return
-        self.completions = self.generate_completions(raw_completion)
-        self.open_query_completions(view)
+        raw_completion = self.lsp_client.complete(src, row, col)
+        # print("->>",raw_completion)
+        completions = completion.format_code(raw_completion)
+        # print("<<-",completions)
+        # print(repr(completions))
+        if completions:
+            self.completions = completions
+            self.open_query_completions(view)
+
+        # release lock
+        self.lsp_process = False
+        view.erase_status("lsp_process")
 
     def open_query_completions(self, view):
         """Opens (forced) the sublime autocomplete window"""
@@ -154,20 +115,79 @@ class Jedi(sublime_plugin.EventListener):
 
         if self.completions:
             completions = self.completions
+            # print("--->",completions)
             self.completions = None
             return (completions, sublime.INHIBIT_WORD_COMPLETIONS)
+
+        old_prefix = self._prefix
+        # print(prefix, old_prefix)
+        self._prefix = prefix
+        if prefix.startswith(old_prefix):
+            return
+        # print("completing",prefix)
+        # prevent call multiple process
+        self.lsp_process = True
+        view.set_status("lsp_process", "🔄 Completing")
+
+        if not self.lsp_client:
+            self.init_lsp_client(view)
+            return
 
         thread = threading.Thread(
             target=self.fetch_completions, args=(view, prefix, locations))
         thread.start()
 
+    def fetch_help(self, view, point):
+        word_region = view.word(point)
+        word = view.substr(word_region)
+        if point == word_region.b:
+            self.lsp_process = False
+            view.erase_status("lsp_process")
+            return
+        src = view.substr(sublime.Region(0, word_region.b))
+        line, col = view.rowcol(point)
+        # print(src)
+        raw_help = self.lsp_client.hover(src, line, col)
+        # print(raw_help)
+        help_data = hover.format_code(raw_help)
+        # print(help_data)
+        hover.show_popup(view=view, content=help_data, location=point)
+        self.lsp_process = False
+        view.erase_status("lsp_process")
 
-class PytoolsResetjediCommand(sublime_plugin.TextCommand):
+    def on_hover(self, view, point, hover_zone):
+        if not view.match_selector(point, "source.python"):
+            return
+
+        if hover_zone == sublime.HOVER_TEXT:
+            # print(point)
+            # print(view.word(point))
+            # print(view.substr(view.word(point)))
+            self.lsp_process = True
+            view.set_status("lsp_process", "🔄 Documentation")
+            if not self.lsp_client:
+                self.init_lsp_client(view)
+                view.erase_status("lsp_process")
+                return
+
+            thread = threading.Thread(
+                target=self.fetch_help, args=(view, point))
+            thread.start()
+        else:
+            return
+
+class PytoolsResetserverCommand(sublime_plugin.TextCommand):
     def run(self, edit):
         view = self.view
-        thread = threading.Thread(target=self.do_reset)
-        thread.start()
+        src = view.substr(sublime.Region(0, view.size()))
+        python = load_settings("python")
+        env = get_sysenv()
+        lsp_client = Client(python=python, env=env)
+        lsp_client.initialize()
+        lsp_client.exit()
 
-    def do_reset(self):
-        client = Client()
-        client.exit()
+    def is_visible(self):
+        view = self.view
+        if not view.match_selector(0, "source.python"):
+            return False
+        return True
