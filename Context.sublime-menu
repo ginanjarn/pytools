@@ -1,0 +1,9 @@
+[
+	{
+		"caption": "-"
+	},
+	{
+		"caption": "Open Terminal",
+		"command": "pytools_openterminal"
+	}
+]
