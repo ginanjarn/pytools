@@ -136,6 +136,7 @@ class Pytools(sublime_plugin.EventListener):
         thread = threading.Thread(
             target=self.fetch_completions, args=(view, prefix, locations))
         thread.start()
+        return ([], sublime.INHIBIT_WORD_COMPLETIONS)
 
     def fetch_help(self, view, point):
         word_region = view.word(point)
