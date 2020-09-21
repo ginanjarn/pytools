@@ -77,7 +77,7 @@ class Pytools(sublime_plugin.EventListener):
         # print(repr(completions))
         if completions:
             self.completions = completions
-            self.open_query_completions(view)
+            # self.open_query_completions(view)
 
         # release lock
         self.lsp_process = False
@@ -119,11 +119,11 @@ class Pytools(sublime_plugin.EventListener):
             self.completions = None
             return (completions, sublime.INHIBIT_WORD_COMPLETIONS)
 
-        old_prefix = self._prefix
-        # print(prefix, old_prefix)
-        self._prefix = prefix
-        if prefix.startswith(old_prefix):
-            return
+        # old_prefix = self._prefix
+        # # print(prefix, old_prefix)
+        # self._prefix = prefix
+        # if prefix.startswith(old_prefix):
+        #     return
         # print("completing",prefix)
         # prevent call multiple process
         self.lsp_process = True
