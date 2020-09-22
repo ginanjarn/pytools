@@ -87,7 +87,7 @@ class Client:
         self._server_error = False
         # self.req_id = 0
         self._server_activate_retry = 0
-        
+
         # Service block ------------------
         self.completion_capable = False
         self.hover_capable = False
@@ -106,16 +106,17 @@ class Client:
             si = subprocess.STARTUPINFO()
             si.dwFlags |= subprocess.SW_HIDE | subprocess.STARTF_USESHOWWINDOW
             server_proc = subprocess.call(run_server_cmd, shell=True,
-                             env=self.env, startupinfo=si)
+                                          env=self.env, startupinfo=si)
         else:
-            server_proc = subprocess.call(run_server_cmd, shell=True, env=self.env)
+            server_proc = subprocess.call(
+                run_server_cmd, shell=True, env=self.env)
             # pass
 
         # print(server_proc)
         if server_proc != 0:
             self._server_error = True
             return
-        
+
         self._server_activate_retry += 1
 
     def _request(self, content: str) -> (str, any):
@@ -162,6 +163,7 @@ class Client:
                     else:
                         content = result
                         print(len(content))
+                        # print(content)
                         break
             return content, error
 
@@ -204,7 +206,7 @@ class Client:
                     if method == "exit":
                         self.terminate_all_services()
                         return
-                    
+
                     if not self._server_error:
                         self.try_running_server()
                         time.sleep(2)
@@ -224,7 +226,8 @@ class Client:
             # print(result)
             # if result["id"] != self.req_id:
             if result["id"] != req_id:
-                print("invalid response id. want {} ->> {}".format(req_id,result["id"]))
+                print(
+                    "invalid response id. want {} ->> {}".format(req_id, result["id"]))
                 return
             # self.req_id += 1
             return result["results"]
@@ -249,14 +252,20 @@ class Client:
             self.completion_capable = result["capabilities"]["capability"]["completionProvider"]["resolveProvider"]
             self.hover_capable = result["capabilities"]["capability"]["hoverProvider"]
             self.document_formatting_capable = result["capabilities"]["capability"]["documentFormattingProvider"]
-        except(ValueError,KeyError,TypeError):
+        except(ValueError, KeyError, TypeError):
             pass
 
     def exit(self):
         try:
-            self.request("exit")            
-        except(ValueError,KeyError,TypeError):
+            self.request("exit")
+        except(ValueError, KeyError, TypeError):
             pass
+
+    def workspace_config_change(self, config):
+        if not self.completion_capable:
+            return None
+        params = {"DidChangeConfigurationParams": {"settings": config}}
+        result = self.request("workspace/didChangeConfiguration", params)
 
     def complete(self, source, line, character):
         if not self.completion_capable:
