@@ -53,11 +53,13 @@ class Pytools(sublime_plugin.EventListener):
         self.lsp_client = None
         self.lsp_process = False
         self._prefix = ""
+        self._workspace_config = None
 
     def init_lsp_client(self, view):
         python = load_settings("python")
         env = get_sysenv()
-        env["PATH"] = os.pathsep.join(view.window().folders()) + os.pathsep + env['PATH']
+        env["PATH"] = os.pathsep.join(
+            view.window().folders()) + os.pathsep + env['PATH']
         self.lsp_client = Client(python=python, env=env)
         # self.lsp_client.initialize()
         thread = threading.Thread(target=self.lsp_client.initialize)
@@ -133,6 +135,9 @@ class Pytools(sublime_plugin.EventListener):
             self.init_lsp_client(view)
             return
 
+        if not self._workspace_config:
+            self.change_workspace_config(view)
+
         thread = threading.Thread(
             target=self.fetch_completions, args=(view, prefix, locations))
         thread.start()
@@ -171,11 +176,28 @@ class Pytools(sublime_plugin.EventListener):
                 view.erase_status("lsp_process")
                 return
 
+            if not self._workspace_config:
+                self.change_workspace_config(view)
             thread = threading.Thread(
                 target=self.fetch_help, args=(view, point))
             thread.start()
         else:
             return
+
+    def on_activated(self, view):
+        if not view.match_selector(0, "source.python"):
+            return
+
+        if not self.lsp_client:
+            return
+
+        self.change_workspace_config(view)
+
+    def change_workspace_config(self, view):
+        config = {"path": os.path.dirname(view.file_name())}
+        self._workspace_config = config
+        self.lsp_client.workspace_config_change(self._workspace_config)
+
 
 class PytoolsResetserverCommand(sublime_plugin.TextCommand):
     def run(self, edit):

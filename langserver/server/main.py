@@ -78,9 +78,10 @@ class ErrorCodes:
 
 
 class Server:
-    def __init__(self,**kwargs):
-        self._test_conn = kwargs.get("test_conn",False)
-        self._run_forever = kwargs.get("run_forever",True)
+    def __init__(self, **kwargs):
+        self._test_conn = kwargs.get("test_conn", False)
+        self._run_forever = kwargs.get("run_forever", True)
+        self.workspace_settings = {}
 
     def run_service(self):
         HOST = '127.0.0.1'  # Standard loopback interface address (localhost)
@@ -88,7 +89,7 @@ class Server:
         PORT = 9364
 
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR, 1)
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             s.bind((HOST, PORT))
             s.listen()
             while True:
@@ -182,12 +183,16 @@ class Server:
             error object contain 'error code' and 'message'"""
         result, error = None, None
         if method == "initialize":
-            result,err = self.initialize(params)
-            return result,err
-        
+            result, err = self.initialize(params)
+            return result, err
+
         elif method == "exit":
-            result,err = self.exit(params)
-            return result,err
+            result, err = self.exit(params)
+            return result, err
+
+        elif method == "workspace/didChangeConfiguration":
+            result, err = self.change_workspace_config(params)
+            return result, err
 
         elif method == "textDocument/completion":
             result, err = self.complete(params)
@@ -207,21 +212,28 @@ class Server:
         else:
             return None, {"code": ErrorCodes.MethodNotFound, "message": "method not found : {}".format(method)}
 
-    def initialize(self, params) -> (any, any):        
+    def initialize(self, params) -> (any, any):
         capability = {}
         if not completion_error:
-            capability["completionProvider"]={"resolveProvider":True}
+            capability["completionProvider"] = {"resolveProvider": True}
         if not hover_error:
-            capability["hoverProvider"]=True
+            capability["hoverProvider"] = True
         if not formatting_error:
-            capability["documentFormattingProvider"]=True
+            capability["documentFormattingProvider"] = True
 
-        ServerCapabilities = {"capability":capability}
-        return {"capabilities":ServerCapabilities}, {"retry":False}
+        ServerCapabilities = {"capability": capability}
+        return {"capabilities": ServerCapabilities}, {"retry": False}
 
-    def exit(self, params) -> (any,any):
+    def exit(self, params) -> (any, any):
         self._run_forever = False
         return None, {"code": 0}
+
+    def change_workspace_config(self, params):
+        try:
+            self.workspace_settings = params["DidChangeConfigurationParams"]["settings"]
+            return None, None
+        except ValueError as e:
+            return None, str(e)
 
     def complete(self, params) -> (any, any):
         """Do complete
@@ -240,15 +252,15 @@ class Server:
             # jedi line is one based
             line += 1
             character = params["position"]["character"]
-            s = Completion(src)
-            result, err = s.complete(line,character)
+            s = Completion(src, project_settings=self.workspace_settings)
+            result, err = s.complete(line, character)
             if err:
-                return None,err
+                return None, err
             return result, None
         except ValueError as e:
             return None, str(e)
 
-    def hover(self,params) -> (any,any):
+    def hover(self, params) -> (any, any):
         """Do hover
         Params
         ------
@@ -266,14 +278,14 @@ class Server:
             line += 1
             character = params["position"]["character"]
             h = Hover(src)
-            result, err = h.hover(line,character)
+            result, err = h.hover(line, character)
             if err:
                 return None, err
             return result, None
         except ValueError as e:
-            return None,str(e)
+            return None, str(e)
 
-    def formatting(self,params):
+    def formatting(self, params):
         try:
             src = params["textDocument"]["uri"]
             f = Formatting(src)
@@ -287,11 +299,12 @@ class Server:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--test_conn",help="testing connection server",action="store_true")
-    parser.add_argument("--test",help="testing mode",action="store_true")
+    parser.add_argument(
+        "--test_conn", help="testing connection server", action="store_true")
+    parser.add_argument("--test", help="testing mode", action="store_true")
     args = parser.parse_args()
     if args.test_conn:
-        s = Server(test_conn=True,run_forever=False)
+        s = Server(test_conn=True, run_forever=False)
     elif args.test:
         s = Server(run_forever=False)
     else:
