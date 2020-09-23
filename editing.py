@@ -9,6 +9,17 @@ from .langserver.client.service import Client  # pylint: disable=relative-beyond
 from .langserver.client.sublimetext import completion, hover, formatting  # pylint: disable=relative-beyond-top-level
 
 
+def plugin_loaded():
+    settings = sublime.load_settings("Preferences.sublime-settings")
+    settings.set("show_definitions", False)
+    triggers = [
+        {"selector": "source.python", "characters": "."},
+        {"selector": "source.python meta.qualified-name.python meta.generic-name.python", "characters": "("}
+    ]
+    settings.set("auto_complete_triggers", triggers)
+    sublime.save_settings("Preferences.sublime-settings")
+
+
 def load_settings(key):
     s = sublime.load_settings("Pytools.sublime-settings")
     return s.get(key)
@@ -51,7 +62,8 @@ class Pytools(sublime_plugin.EventListener):
     def __init__(self):
         self.completions = None
         self.lsp_client = None
-        self.lsp_process = False
+        # self.lsp_process = False
+        self.lsp_process_count = 0
         self._prefix = ""
         self._workspace_config = None
 
@@ -66,6 +78,12 @@ class Pytools(sublime_plugin.EventListener):
         thread.start()
 
     def fetch_completions(self, view, prefix, locations):
+        # if self.lsp_process:
+        #     return
+        # if self.lsp_process_count >= 2:
+        #     return
+
+        print(repr(prefix))
         cursor = locations[0]
         src = view.substr(sublime.Region(0, cursor))
         row, col = view.rowcol(cursor)
@@ -79,10 +97,13 @@ class Pytools(sublime_plugin.EventListener):
         # print(repr(completions))
         if completions:
             self.completions = completions
-            # self.open_query_completions(view)
+            self._old_prefix = prefix
+            # if prefix == "":
+            self.open_query_completions(view)
 
         # release lock
-        self.lsp_process = False
+        # self.lsp_process = False
+        self.lsp_process_count -= 1
         view.erase_status("lsp_process")
 
     def open_query_completions(self, view):
@@ -115,11 +136,17 @@ class Pytools(sublime_plugin.EventListener):
         if not view.match_selector(location, "source.python"):
             return
 
+        if view.match_selector(location, "meta.string.python"):
+            return
+
         if self.completions:
             completions = self.completions
             # print("--->",completions)
             self.completions = None
-            return (completions, sublime.INHIBIT_WORD_COMPLETIONS)
+            if prefix.startswith(self._old_prefix) or self._old_prefix == "":
+                return (completions, sublime.INHIBIT_WORD_COMPLETIONS)
+            else:
+                return ([], sublime.INHIBIT_WORD_COMPLETIONS)
 
         # old_prefix = self._prefix
         # # print(prefix, old_prefix)
@@ -128,7 +155,17 @@ class Pytools(sublime_plugin.EventListener):
         #     return
         # print("completing",prefix)
         # prevent call multiple process
-        self.lsp_process = True
+
+        # if self.lsp_process:
+        #     return ([], sublime.INHIBIT_WORD_COMPLETIONS)
+            # return
+
+        # self.lsp_process = True
+        if self.lsp_process_count > 1:
+            return ([], sublime.INHIBIT_WORD_COMPLETIONS)
+            # return
+        print(repr(self.lsp_process_count))
+        self.lsp_process_count += 1
         view.set_status("lsp_process", "🔄 Completing")
 
         if not self.lsp_client:
@@ -158,7 +195,8 @@ class Pytools(sublime_plugin.EventListener):
         help_data = hover.format_code(raw_help)
         # print(help_data)
         hover.show_popup(view=view, content=help_data, location=point)
-        self.lsp_process = False
+        # self.lsp_process = False
+        self.lsp_process_count -= 1
         view.erase_status("lsp_process")
 
     def on_hover(self, view, point, hover_zone):
@@ -169,7 +207,11 @@ class Pytools(sublime_plugin.EventListener):
             # print(point)
             # print(view.word(point))
             # print(view.substr(view.word(point)))
-            self.lsp_process = True
+            # self.lsp_process = True
+            if self.lsp_process_count > 1:
+                return
+            print(repr(self.lsp_process_count))
+            self.lsp_process_count += 1
             view.set_status("lsp_process", "🔄 Documentation")
             if not self.lsp_client:
                 self.init_lsp_client(view)
@@ -187,22 +229,27 @@ class Pytools(sublime_plugin.EventListener):
     def on_activated(self, view):
         if not view.match_selector(0, "source.python"):
             return
-
-        if not self.lsp_client:
-            return
-
         self.change_workspace_config(view)
 
     def change_workspace_config(self, view):
+        if not self.lsp_client:
+            return
         config = {"path": os.path.dirname(view.file_name())}
         self._workspace_config = config
-        self.lsp_client.workspace_config_change(self._workspace_config)
+        def do():
+            self.lsp_client.workspace_config_change(self._workspace_config)
+        thread = threading.Thread(target=do)
+        thread.run()
 
 
 class PytoolsResetserverCommand(sublime_plugin.TextCommand):
     def run(self, edit):
-        view = self.view
-        src = view.substr(sublime.Region(0, view.size()))
+        # view = self.view
+        # src = view.substr(sublime.Region(0, view.size()))
+        thread = threading.Thread(target=self.exit_thread)
+        thread.start()
+
+    def exit_thread(self):
         python = load_settings("python")
         env = get_sysenv()
         lsp_client = Client(python=python, env=env)
