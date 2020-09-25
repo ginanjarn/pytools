@@ -2,7 +2,6 @@ import socket
 import json
 import os
 import subprocess
-import time
 import threading
 import random
 
@@ -83,15 +82,16 @@ class Client:
         self.python = python
         self.env = env
         self._run_server = kwargs.get("run_server", True)
-        # self._server_running = False
+        self._server_started = False
         self._server_error = False
-        # self.req_id = 0
-        self._server_activate_retry = 0
+        self.capabilities = None
+        self.config = {}
 
-        # Service block ------------------
-        self.completion_capable = False
-        self.hover_capable = False
-        self.document_formatting_capable = False
+    def change_python(self, python="python", env=None):
+        self.python = python
+        self.env = env
+
+        # self.restart_server()
 
     def run_server(self):
         def get_server():
@@ -110,14 +110,11 @@ class Client:
         else:
             server_proc = subprocess.call(
                 run_server_cmd, shell=True, env=self.env)
-            # pass
 
-        # print(server_proc)
         if server_proc != 0:
+            print("server error", repr(server_proc))
             self._server_error = True
             return
-
-        self._server_activate_retry += 1
 
     def _request(self, content: str) -> (str, any):
         """Request message to server
@@ -167,34 +164,12 @@ class Client:
                         break
             return content, error
 
-            # print('Received', repr(data))
         except ConnectionRefusedError:
             return "", ErrorCodes.serverErrorStart
 
-    def try_running_server(self):
-        # don't run if not allowed
-        if not self._run_server:
-            return
-        # run server if not running
-        # if self._server_running:
-        #     return
-        # prevent run if server broken
-        if self._server_activate_retry < 5:
-            if not self._server_error:
-                # running server
-                # self.run_server()
-                thread = threading.Thread(target=self.run_server)
-                thread.setDaemon(True)
-                thread.start()
-        else:
-            # counter >= 5  ---> server broken
-            self._server_error = True
-
     def request(self, method, params=None) -> any:
         try:
-            # print(self.req_id)
             req_id = str(random.random())
-            # msg = {"jsonrpc": "2.0", "id": self.req_id,
             msg = {"jsonrpc": "2.0", "id": req_id,
                    "method": method, "params": params}
 
@@ -207,37 +182,49 @@ class Client:
                         self.terminate_all_services()
                         return
 
-                    if not self._server_error:
-                        self.try_running_server()
-                        time.sleep(2)
-                        result, err = self._request(msg_str)
-                    else:
+                    if self._server_error:
                         return
+                    else:
+                        if not self._server_started:
+                            self._server_started = True
+                            thread = threading.Thread(target=self.run_server)
+                            thread.setDaemon(True)
+                            thread.start()
+
+                        while not self._server_error:
+                            result, err = self._request(msg_str)
+                            if err:
+                                if self._server_error:
+                                    break
+                                if err == ErrorCodes.serverErrorStart:
+                                    continue
+                            if result:
+                                break
+
                 else:
-                    # terminate on success terminate server
-                    if method == "exit":
-                        if err["code"] == 0:
-                            self.terminate_all_services()
-                    elif method == "initialize":
-                        pass
-                    else:
-                        return
+                    print("results error", repr(err))
+                    return
             result = json.loads(result)
             # print(result)
-            # if result["id"] != self.req_id:
             if result["id"] != req_id:
                 print(
                     "invalid response id. want {} ->> {}".format(req_id, result["id"]))
                 return
-            # self.req_id += 1
+            
+            # terminate on success terminate server
+            if method == "exit":
+                if result["error"]["code"] == 0:
+                    self.terminate_all_services()
+                    
             return result["results"]
-        except (KeyError, ValueError):
+        except (KeyError, ValueError) as e:
+            print("request error", str(e))
             return None
 
     def terminate_all_services(self):
-        self.completion_capable = False
-        self.hover_capable = False
-        self.document_formatting_capable = False
+        self._server_started = False
+        self.capabilities = None
+        self.config = {}
 
     def test_conn(self, message=""):
         result, err = self._request(message)
@@ -248,10 +235,11 @@ class Client:
     def initialize(self):
         try:
             result = self.request("initialize")
-            # print(result)
-            self.completion_capable = result["capabilities"]["capability"]["completionProvider"]["resolveProvider"]
-            self.hover_capable = result["capabilities"]["capability"]["hoverProvider"]
-            self.document_formatting_capable = result["capabilities"]["capability"]["documentFormattingProvider"]
+            self.capabilities = {}
+            self.capabilities["completion_capable"] = result["capabilities"]["capability"]["completionProvider"]["resolveProvider"]
+            self.capabilities["hover_capable"] = result["capabilities"]["capability"]["hoverProvider"]
+            self.capabilities["document_formatting_capable"] = result["capabilities"]["capability"]["documentFormattingProvider"]
+
         except(ValueError, KeyError, TypeError):
             pass
 
@@ -261,15 +249,27 @@ class Client:
         except(ValueError, KeyError, TypeError):
             pass
 
+    def restart_server(self):
+        self.exit()
+        self.initialize()
+
     def workspace_config_change(self, config):
-        if not self.completion_capable:
+        if not self.capabilities:
+            print("not initialized")
             return None
+        if config == self.config:
+            return
+        self.config = config
         params = {"DidChangeConfigurationParams": {"settings": config}}
         result = self.request("workspace/didChangeConfiguration", params)
 
     def complete(self, source, line, character):
-        if not self.completion_capable:
-            return None
+        if not self.capabilities:
+            print("not initialized")
+            return
+        if not self.capabilities["completion_capable"]:
+            print("no completion available")
+            return
         params = {"textDocument": {"uri": source}, "position": {
             "line": line, "character": character}}
         result = self.request("textDocument/completion", params)
@@ -278,8 +278,12 @@ class Client:
         return result
 
     def hover(self, source, line, character):
-        if not self.completion_capable:
-            return None
+        if not self.capabilities:
+            print("not initialized")
+            return
+        if not self.capabilities["hover_capable"]:
+            print("no hover available")
+            return
         params = {"textDocument": {"uri": source}, "position": {
             "line": line, "character": character}}
         result = self.request("textDocument/hover", params)
@@ -288,8 +292,12 @@ class Client:
         return result
 
     def formatting(self, source):
-        if not self.document_formatting_capable:
-            return None
+        if not self.capabilities:
+            print("not initialized")
+            return
+        if not self.capabilities["document_formatting_capable"]:
+            print("no document_formatting available")
+            return
         params = {"textDocument": {"uri": source}}
         result = self.request("textDocument/formatting", params)
         if not result:

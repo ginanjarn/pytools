@@ -252,7 +252,7 @@ class Server:
             # jedi line is one based
             line += 1
             character = params["position"]["character"]
-            s = Completion(src, project_settings=self.workspace_settings)
+            s = Completion(src, settings=self.workspace_settings)
             result, err = s.complete(line, character)
             if err:
                 return None, err
@@ -277,7 +277,7 @@ class Server:
             # jedi line is one based
             line += 1
             character = params["position"]["character"]
-            h = Hover(src)
+            h = Hover(src, settings=self.workspace_settings)
             result, err = h.hover(line, character)
             if err:
                 return None, err
