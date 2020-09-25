@@ -11,9 +11,14 @@ except ModuleNotFoundError:
 class Hover:
     def __init__(self, source, **kwargs):
         self.source = source
-        project_settings = kwargs.get("project_settings", {})
-        path = project_settings.get("path", "")
+        settings = kwargs.get("settings", {})
+        try:
+            path = settings["jedi"]["project"]["path"]
+        except KeyError:
+            path = ""
+
         self.project = Project(path=path)
+
 
     def hover(self, line: int, character: int) -> (any, any):
         try:
