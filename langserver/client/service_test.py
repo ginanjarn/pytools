@@ -89,10 +89,25 @@ class ServiceTest(unittest.TestCase):
     #     c.exit()
     #     self.assertEqual(want, expect, "test hover")
 
-    def test_client_formatting(self):
-        c = Client()
+    # def test_client_formatting(self):
+    #     c = Client()
+    #     c.initialize()
+    #     print(c.formatting("x,y=12,8"))
+
+    def test_initialize(self):
+        c = Client(python="C:\\Users\\ginanjar\\miniconda3\\python.exe")
         c.initialize()
-        print(c.formatting("x,y=12,8"))
+        # c.complete("import numpy",1,10)
+        c.exit()
+        c.exit()
+        c.change_python(python="C:\\Users\\ginanjar\\miniconda3\\envs\\envwx\\python.exe")
+        # c.complete("import numpy",1,10)
+        c.initialize()
+        # c.complete("import numpy",1,10)
+        # c.hover("import numpy",1,10)
+        c.exit()
+        c.exit()
+
 
 
 if __name__ == '__main__':
