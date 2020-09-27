@@ -154,7 +154,7 @@ class Pytools(sublime_plugin.EventListener):
             else:
                 return empty_completions
 
-        if self.lsp_process_count > 1:
+        if self.lsp_process_count >= 1:
             return empty_completions
         self.lsp_process_count += 1
         view.set_status("lsp_process", "🔄 Completing")
@@ -189,7 +189,7 @@ class Pytools(sublime_plugin.EventListener):
             return
 
         if hover_zone == sublime.HOVER_TEXT:
-            if self.lsp_process_count > 1:
+            if self.lsp_process_count >= 1:
                 return
             self.lsp_process_count += 1
             view.set_status("lsp_process", "🔄 Documentation")
