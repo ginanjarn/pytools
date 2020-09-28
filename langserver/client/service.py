@@ -168,7 +168,7 @@ class Client:
                         break
             return content, error
 
-        except ConnectionRefusedError as e:
+        except (ConnectionRefusedError, ConnectionResetError) as e:
             logging.warning(e)
             return "", ErrorCodes.serverErrorStart
 
