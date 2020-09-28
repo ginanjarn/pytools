@@ -3,6 +3,7 @@ import sublime_plugin
 import threading
 import os
 import subprocess
+import logging
 
 def get_sysenv():
     s = sublime.load_settings("Pytools.sublime-settings")
@@ -21,16 +22,27 @@ class PytoolsOpenterminalCommand(sublime_plugin.TextCommand):
         env_manager = s.get("manager")
         env_active = s.get("active_environment")
         if env_manager == "conda":
-            activate_cmd = ["conda","activate",env_active]
+            activate_cmd = ["activate",env_active]
         elif env_manager == "venv":
             activate_cmd = ["activate"]
         else:
             activate_cmd = []
+            logging.error("environment manager not found")
 
         if os.name == "nt":
             terminal_cmd = ["C:\\Windows\\System32\\cmd.exe","/K"]
-        else:
-            terminal_cmd = ["gnome-terminal","-c"]        
+        else:            
+            terminal = ["gnome-terminal","pantheon-terminal","xfce4-terminal","konsole",
+                "lxterminal","mate-terminal","xterm"]
+            terminal_cmd = None
+            for tm in terminal:
+                tm_path = os.path.join("/usr/bin",tm)
+                if os.path.isfile(tm_path):
+                    terminal_cmd = [tm_path,"-c"]
+                    break
+            if not terminal_cmd:                
+                logging.error("terminal not found")
+                return
 
         proccess_cmd = terminal_cmd+activate_cmd
 

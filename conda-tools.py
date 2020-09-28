@@ -57,7 +57,7 @@ class PytoolsEnvironmentSetupCommand(sublime_plugin.TextCommand):
         if len(envs) > 0:
             envs = [e for e in envs if not e.startswith(".")]
             for env in envs:
-                prefix = os.path.join(path, "envs")
+                prefix = os.path.join(path, "envs", env)
                 env_path = os.pathsep.join([prefix,
                                             os.path.join(
                                                 prefix, "Library", "mingw-w64", "bin"),
@@ -82,7 +82,7 @@ class PytoolsEnvironmentSetupCommand(sublime_plugin.TextCommand):
         if not env_list:
             environment_settings["list"] = conda_l
         else:
-            environment_settings["list"].append(conda_l)
+            environment_settings["list"].extend(conda_l)
         s.set("environment", environment_settings)
         sublime.save_settings("Pytools.sublime-settings")
 

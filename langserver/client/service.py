@@ -4,6 +4,7 @@ import os
 import subprocess
 import threading
 import random
+import logging
 
 
 def pack(content: str) -> bytes:
@@ -105,14 +106,17 @@ class Client:
             # so only use it if on Windows
             si = subprocess.STARTUPINFO()
             si.dwFlags |= subprocess.SW_HIDE | subprocess.STARTF_USESHOWWINDOW
-            server_proc = subprocess.call(run_server_cmd, shell=True,
-                                          env=self.env, startupinfo=si)
+            server_proc = subprocess.Popen(run_server_cmd, stdin=subprocess.PIPE,
+                                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True,
+                                           env=self.env, startupinfo=si)
         else:
-            server_proc = subprocess.call(
-                run_server_cmd, shell=True, env=self.env)
+            server_proc = subprocess.Popen(
+                run_server_cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, shell=True, env=self.env)
 
-        if server_proc != 0:
-            print("server error", repr(server_proc))
+        _, serr = server_proc.communicate()
+        if server_proc.returncode != 0:
+            logging.error(serr.decode())
             self._server_error = True
             return
 
@@ -164,7 +168,8 @@ class Client:
                         break
             return content, error
 
-        except ConnectionRefusedError:
+        except ConnectionRefusedError as e:
+            logging.warning(e)
             return "", ErrorCodes.serverErrorStart
 
     def request(self, method, params=None) -> any:
@@ -210,15 +215,16 @@ class Client:
                 print(
                     "invalid response id. want {} ->> {}".format(req_id, result["id"]))
                 return
-            
+
             # terminate on success terminate server
             if method == "exit":
                 if result["error"]["code"] == 0:
                     self.terminate_all_services()
-                    
+
             return result["results"]
         except (KeyError, ValueError) as e:
-            print("request error", str(e))
+            logging.error(e)
+            # print("request error", str(e))
             return None
 
     def terminate_all_services(self):
@@ -236,17 +242,27 @@ class Client:
         try:
             result = self.request("initialize")
             self.capabilities = {}
-            self.capabilities["completion_capable"] = result["capabilities"]["capability"]["completionProvider"]["resolveProvider"]
-            self.capabilities["hover_capable"] = result["capabilities"]["capability"]["hoverProvider"]
-            self.capabilities["document_formatting_capable"] = result["capabilities"]["capability"]["documentFormattingProvider"]
+            completion = result["capabilities"]["capability"].get(
+                "completionProvider")
+            if completion:
+                self.capabilities["completion_capable"] = completion["resolveProvider"]
+            hover = result["capabilities"]["capability"].get("hoverProvider")
+            if hover:
+                self.capabilities["hover_capable"] = hover
+            formatting = result["capabilities"]["capability"].get(
+                "documentFormattingProvider")
+            if formatting:
+                self.capabilities["document_formatting_capable"] = formatting
 
-        except(ValueError, KeyError, TypeError):
+        except(ValueError, KeyError, TypeError) as e:
+            logging.error(e)
             pass
 
     def exit(self):
         try:
             self.request("exit")
-        except(ValueError, KeyError, TypeError):
+        except(ValueError, KeyError, TypeError) as e:
+            logging.warning(e)
             pass
 
     def restart_server(self):
@@ -265,10 +281,12 @@ class Client:
 
     def complete(self, source, line, character):
         if not self.capabilities:
-            print("not initialized")
+            # print("not initialized")
+            logging.error("not initialized")
             return
         if not self.capabilities["completion_capable"]:
-            print("no completion available")
+            # print("no completion available")
+            logging.error("no completion available")
             return
         params = {"textDocument": {"uri": source}, "position": {
             "line": line, "character": character}}
@@ -279,10 +297,12 @@ class Client:
 
     def hover(self, source, line, character):
         if not self.capabilities:
-            print("not initialized")
+            # print("not initialized")
+            logging.error("not initialized")
             return
         if not self.capabilities["hover_capable"]:
-            print("no hover available")
+            # print("no hover available")
+            logging.error("no hover available")
             return
         params = {"textDocument": {"uri": source}, "position": {
             "line": line, "character": character}}
@@ -293,10 +313,12 @@ class Client:
 
     def formatting(self, source):
         if not self.capabilities:
-            print("not initialized")
+            # print("not initialized")
+            logging.error("not initialized")
             return
         if not self.capabilities["document_formatting_capable"]:
-            print("no document_formatting available")
+            # print("no document_formatting available")
+            logging.error("no document_formatting available")
             return
         params = {"textDocument": {"uri": source}}
         result = self.request("textDocument/formatting", params)
