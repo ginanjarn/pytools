@@ -1,8 +1,14 @@
+import logging
 completion_error = None
+
 try:
     from jedi import Script, Project
 except ModuleNotFoundError:
     completion_error = "jedi"
+
+
+logging.basicConfig(format='%(levelname)s: %(asctime)s  %(name)s: %(message)s')
+logger = logging.getLogger(__name__)
 
 
 class Completion:
@@ -11,7 +17,8 @@ class Completion:
         settings = kwargs.get("settings", {})
         try:
             path = settings["jedi"]["project"]["path"]
-            print(path)
+            # print(path)
+            logger.debug(path)
         except KeyError:
             path = ""
 
@@ -29,4 +36,5 @@ class Completion:
                 completion_list.append(completion)
             return completion_list, None
         except ValueError as e:
+            logger.error(e)
             return None, str(e)

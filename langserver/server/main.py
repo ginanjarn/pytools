@@ -4,7 +4,10 @@ import argparse
 from service.completion import Completion, completion_error  # pylint: disable=import-error
 from service.hover import Hover, hover_error  # pylint: disable=import-error
 from service.formatting import Formatting, formatting_error  # pylint: disable=import-error
+import logging
 
+logging.basicConfig(format='%(levelname)s: %(asctime)s  %(name)s: %(message)s')
+logger = logging.getLogger(__name__)
 
 def pack(content: str) -> bytes:
     """Pack string content to binary.
@@ -158,13 +161,16 @@ class Server:
             resp_body = res
 
         except ValueError as e:
+            logger.error(e)
             resp_error = {"code": ErrorCodes.InvalidParams, "message": str(e)}
         except Exception as e:
+            logger.error(e)
             resp_error = {"code": ErrorCodes.InvalidRequest, "message": str(e)}
         finally:
             # Return
             msg = {"jsonrpc": "2.0", "id": req_id,
                    "results": resp_body, "error": resp_error}
+            logger.debug(msg)
             return json.dumps(msg)
 
     def _act(self, method, params) -> (any, dict):
@@ -226,13 +232,16 @@ class Server:
 
     def exit(self, params) -> (any, any):
         self._run_forever = False
+        logger.debug("terminated")
         return None, {"code": 0}
 
     def change_workspace_config(self, params):
         try:
             self.workspace_settings = params["DidChangeConfigurationParams"]["settings"]
+            logger.debug(self.workspace_settings)
             return None, None
         except ValueError as e:
+            logger.error(e)
             return None, str(e)
 
     def complete(self, params) -> (any, any):
@@ -254,10 +263,12 @@ class Server:
             character = params["position"]["character"]
             s = Completion(src, settings=self.workspace_settings)
             result, err = s.complete(line, character)
+            logger.debug(result)
             if err:
                 return None, err
             return result, None
         except ValueError as e:
+            logger.error(e)
             return None, str(e)
 
     def hover(self, params) -> (any, any):
@@ -279,10 +290,12 @@ class Server:
             character = params["position"]["character"]
             h = Hover(src, settings=self.workspace_settings)
             result, err = h.hover(line, character)
+            logger.debug(result)
             if err:
                 return None, err
             return result, None
         except ValueError as e:
+            logger.error(e)
             return None, str(e)
 
     def formatting(self, params):
@@ -290,23 +303,28 @@ class Server:
             src = params["textDocument"]["uri"]
             f = Formatting(src)
             result, err = f.format_code()
+            logger.debug(result)
             if err:
                 return None, err
             return result, None
         except ValueError as e:
+            logger.error(e)
             return None, str(e)
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--test_conn", help="testing connection server", action="store_true")
-    parser.add_argument("--test", help="testing mode", action="store_true")
-    args = parser.parse_args()
-    if args.test_conn:
-        s = Server(test_conn=True, run_forever=False)
-    elif args.test:
-        s = Server(run_forever=False)
-    else:
-        s = Server(run_forever=True)
-    s.run_service()
+    try:
+        parser = argparse.ArgumentParser()
+        parser.add_argument(
+            "--test_conn", help="testing connection server", action="store_true")
+        parser.add_argument("--test", help="testing mode", action="store_true")
+        args = parser.parse_args()
+        if args.test_conn:
+            s = Server(test_conn=True, run_forever=False)
+        elif args.test:
+            s = Server(run_forever=False)
+        else:
+            s = Server(run_forever=True)
+        s.run_service()
+    except Exception as e:
+        logger.critical(e)
