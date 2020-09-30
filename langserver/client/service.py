@@ -222,7 +222,8 @@ class Client:
             result = json.loads(result)
             logger.debug("results = {}".format(result))
             if result["id"] != req_id:
-                logger.error("invalid request id, want %s expected %s"%(req_id,result["id"]))
+                logger.error("invalid request id, want %s expected %s" %
+                             (req_id, result["id"]))
                 return
 
             # terminate on success terminate server
@@ -298,51 +299,60 @@ class Client:
         self.request("workspace/didChangeConfiguration", params)
 
     def complete(self, source, line, character):
-        if not self.capabilities:
-            # print("not initialized")
-            logger.error("not initialized")
-            return
-        if not self.capabilities["completion_capable"]:
-            # print("no completion available")
-            logger.error("no completion available")
-            return
-        params = {"textDocument": {"uri": source}, "position": {
-            "line": line, "character": character}}
-        result = self.request("textDocument/completion", params)
-        logger.debug(result)
-        if not result:
+        try:
+            if not self.capabilities:
+                # print("not initialized")
+                logger.error("not initialized")
+                return
+            if not self.capabilities["completion_capable"]:
+                # print("no completion available")
+                logger.error("no completion available")
+                return
+            params = {"textDocument": {"uri": source}, "position": {
+                "line": line, "character": character}}
+            result = self.request("textDocument/completion", params)
+            logger.debug(result)
+            if not result:
+                return None
+            return result
+        except Exception as e:
             return None
-        return result
 
     def hover(self, source, line, character):
-        if not self.capabilities:
-            # print("not initialized")
-            logger.error("not initialized")
-            return
-        if not self.capabilities["hover_capable"]:
-            # print("no hover available")
-            logger.error("no hover available")
-            return
-        params = {"textDocument": {"uri": source}, "position": {
-            "line": line, "character": character}}
-        result = self.request("textDocument/hover", params)
-        logger.debug(result)
-        if not result:
+        try:
+            if not self.capabilities:
+                # print("not initialized")
+                logger.error("not initialized")
+                return
+            if not self.capabilities["hover_capable"]:
+                # print("no hover available")
+                logger.error("no hover available")
+                return
+            params = {"textDocument": {"uri": source}, "position": {
+                "line": line, "character": character}}
+            result = self.request("textDocument/hover", params)
+            logger.debug(result)
+            if not result:
+                return None
+            return result
+        except Exception as e:
             return None
-        return result
 
     def formatting(self, source):
-        if not self.capabilities:
-            # print("not initialized")
-            logger.error("not initialized")
-            return
-        if not self.capabilities["document_formatting_capable"]:
-            # print("no document_formatting available")
-            logger.error("no document_formatting available")
-            return
-        params = {"textDocument": {"uri": source}}
-        result = self.request("textDocument/formatting", params)
-        logger.debug(result)
-        if not result:
+        try:
+            if not self.capabilities:
+                # print("not initialized")
+                logger.error("not initialized")
+                return
+            if not self.capabilities["document_formatting_capable"]:
+                # print("no document_formatting available")
+                logger.error("no document_formatting available")
+                return
+            params = {"textDocument": {"uri": source}}
+            result = self.request("textDocument/formatting", params)
+            logger.debug(result)
+            if not result:
+                return None
+            return result
+        except Exception as e:
             return None
-        return result
