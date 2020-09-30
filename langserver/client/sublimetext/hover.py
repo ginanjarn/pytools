@@ -22,6 +22,8 @@ def show_popup(view, content, location):
 
 def format_code(source):
     try:
+        if not source:
+            return
         contents = source["contents"]
         if contents["language"] == "html":
             contents_value = "<div style=\"margin:.5em\">{}</div>".format(
