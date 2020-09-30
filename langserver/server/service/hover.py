@@ -1,11 +1,14 @@
 import html
+import logging
 hover_error = None
-
 
 try:
     from jedi import Script, Project
 except ModuleNotFoundError:
     completion_error = "jedi"
+
+logging.basicConfig(format='%(levelname)s: %(asctime)s  %(name)s: %(message)s')
+logger = logging.getLogger(__name__)
 
 
 class Hover:
@@ -14,11 +17,11 @@ class Hover:
         settings = kwargs.get("settings", {})
         try:
             path = settings["jedi"]["project"]["path"]
+            logger.debug(path)
         except KeyError:
             path = ""
 
         self.project = Project(path=path)
-
 
     def hover(self, line: int, character: int) -> (any, any):
         try:
@@ -31,26 +34,33 @@ class Hover:
             ret = {"contents": {"language": "html", "value": prebuit_doc}}
             return ret, None
         except ValueError as e:
+            logger.error(e)
             return None, str(e)
 
     def build_html_layout(self, data) -> str:
-        type_ = data.type
-        name = data.name
-        if type_ == "keyword":
-            return "<code>{} : {}</code>".format(type_, name)
+        try:
+            type_ = data.type
+            name = data.name
+            if type_ == "keyword":
+                return "<code>{} : {}</code>".format(type_, name)
 
-        module_path = data.module_path if data.module_path else ""
-        definition = "{}:{}:{}".format(module_path, data.line, data.column)
-        doc = data.docstring()
-        doc = html.escape(doc, quote=False)
+            module_path = data.module_path if data.module_path else ""
+            definition = "{}:{}:{}".format(module_path, data.line, data.column)
+            doc = data.docstring()
+            doc = html.escape(doc, quote=False)
 
-        head = "<code>{} : <a href=\"{}\">{}</a></code>".format(
-            type_, definition, name)
+            head = "<code>{} : <a href=\"{}\">{}</a></code>".format(
+                type_, definition, name)
 
-        doc_lines = doc.split("\n")
-        title = doc_lines[0]
-        title = "<h4>{}</h4>".format(title)
-        body = doc_lines[1:]
-        def wrap_p(line): return "<p>{}</p>".format(line)
-        body = [wrap_p(line) for line in body]
-        return "".join([head, title]+body)
+            doc_lines = doc.split("\n")
+            title = doc_lines[0]
+            title = "<h4>{}</h4>".format(title)
+            body = doc_lines[1:]
+            def wrap_p(line): return "<p>{}</p>".format(line)
+            body = [wrap_p(line) for line in body]
+            result = "".join([head, title]+body)
+            logger.debug(result)
+            return result
+        except Exception as e:
+            logger.error(e)
+            return ""

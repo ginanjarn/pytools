@@ -3,30 +3,50 @@ import sublime_plugin
 import threading
 import os
 import subprocess
+import logging
 
-
-def load_settings(key):
+def get_sysenv():
     s = sublime.load_settings("Pytools.sublime-settings")
-    return s.get(key)
-
+    new_paths = s.get("path","")
+    env = os.environ.copy()
+    env['PATH'] = new_paths + os.path.pathsep + env['PATH']
+    return env
 
 class PytoolsOpenterminalCommand(sublime_plugin.TextCommand):
     def run(self, edit):
         view = self.view
-        dirname = os.path.dirname(view.file_name())
-        bin_name = "Scripts" if os.name == "nt" else "bin"
-        anaconda_dir = load_settings("conda_dir")
-        conda_activate = os.path.join(anaconda_dir, bin_name, "activate")
-        environment = load_settings("conda_active")
+        s = sublime.load_settings("Pytools.sublime-settings")
+        work_dir = os.path.dirname(view.file_name())
+        
+        env_path = s.get("path")
+        env_manager = s.get("manager")
+        env_active = s.get("active_environment")
+        if env_manager == "conda":
+            activate_cmd = ["activate",env_active]
+        elif env_manager == "venv":
+            activate_cmd = ["activate"]
+        else:
+            activate_cmd = []
+            logging.error("environment manager not found")
 
-        terminal = "C:\\Windows\\System32\\cmd.exe" if os.name == "nt" else "gnome-terminal"
-        cmd = "/K" if os.name == "nt" else "-c"
+        if os.name == "nt":
+            terminal_cmd = ["C:\\Windows\\System32\\cmd.exe","/K"]
+        else:            
+            terminal = ["gnome-terminal","pantheon-terminal","xfce4-terminal","konsole",
+                "lxterminal","mate-terminal","xterm"]
+            terminal_cmd = None
+            for tm in terminal:
+                tm_path = os.path.join("/usr/bin",tm)
+                if os.path.isfile(tm_path):
+                    terminal_cmd = [tm_path,"-c"]
+                    break
+            if not terminal_cmd:                
+                logging.error("terminal not found")
+                return
 
-        process_cmd = [terminal, cmd, conda_activate, "&&",
-                       "cd", dirname, "&&", "conda", "activate", environment]
-        # print(process_cmd)
+        proccess_cmd = terminal_cmd+activate_cmd
 
-        subprocess.Popen(process_cmd)
+        subprocess.Popen(proccess_cmd,env=get_sysenv(),cwd=work_dir)
 
     def is_visible(self):
         view = self.view

@@ -4,6 +4,10 @@ import os
 import subprocess
 import threading
 import random
+import logging
+
+logging.basicConfig(format='%(levelname)s: %(asctime)s  %(name)s: %(message)s')
+logger = logging.getLogger(__name__)
 
 
 def pack(content: str) -> bytes:
@@ -98,22 +102,30 @@ class Client:
             filepath = os.path.abspath(__file__)
             path_list = filepath.split(os.sep)
             serverpath = os.sep.join(path_list[:-2]+["server", "main.py"])
+            logger.debug(serverpath)
             return serverpath
         run_server_cmd = [self.python, get_server()]
+        logger.debug(run_server_cmd)
         if os.name == "nt":
             # linux subprocess module does not have STARTUPINFO
             # so only use it if on Windows
             si = subprocess.STARTUPINFO()
             si.dwFlags |= subprocess.SW_HIDE | subprocess.STARTF_USESHOWWINDOW
-            server_proc = subprocess.call(run_server_cmd, shell=True,
-                                          env=self.env, startupinfo=si)
+            server_proc = subprocess.Popen(run_server_cmd, stdin=subprocess.PIPE,
+                                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True,
+                                           env=self.env, startupinfo=si)
         else:
-            server_proc = subprocess.call(
-                run_server_cmd, shell=True, env=self.env)
+            server_proc = subprocess.Popen(
+                run_server_cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, shell=True, env=self.env)
 
-        if server_proc != 0:
-            print("server error", repr(server_proc))
+        _, serr = server_proc.communicate()
+        if server_proc.returncode != 0:
             self._server_error = True
+            logger.critical(serr.decode())
+            return
+        else:
+            logger.info("server running")
             return
 
     def _request(self, content: str) -> (str, any):
@@ -159,12 +171,14 @@ class Client:
                         break
                     else:
                         content = result
-                        print(len(content))
+                        logger.debug(content)
+                        # print(len(content))
                         # print(content)
                         break
             return content, error
 
-        except ConnectionRefusedError:
+        except (ConnectionRefusedError, ConnectionResetError) as e:
+            logger.error(e)
             return "", ErrorCodes.serverErrorStart
 
     def request(self, method, params=None) -> any:
@@ -172,7 +186,7 @@ class Client:
             req_id = str(random.random())
             msg = {"jsonrpc": "2.0", "id": req_id,
                    "method": method, "params": params}
-
+            logger.debug("request message = {}".format(msg))
             msg_str = json.dumps(msg)
             result, err = self._request(msg_str)
             if err:
@@ -202,29 +216,32 @@ class Client:
                                 break
 
                 else:
-                    print("results error", repr(err))
+                    # print("results error", repr(err))
+                    logger.error("results error {}".format(repr(err)))
                     return
             result = json.loads(result)
-            # print(result)
+            logger.debug("results = {}".format(result))
             if result["id"] != req_id:
-                print(
-                    "invalid response id. want {} ->> {}".format(req_id, result["id"]))
+                logger.error("invalid request id, want %s expected %s" %
+                             (req_id, result["id"]))
                 return
-            
+
             # terminate on success terminate server
             if method == "exit":
                 if result["error"]["code"] == 0:
                     self.terminate_all_services()
-                    
+
             return result["results"]
         except (KeyError, ValueError) as e:
-            print("request error", str(e))
+            logging.error(e)
+            # print("request error", str(e))
             return None
 
     def terminate_all_services(self):
         self._server_started = False
         self.capabilities = None
         self.config = {}
+        logger.info("server terminated")
 
     def test_conn(self, message=""):
         result, err = self._request(message)
@@ -236,17 +253,34 @@ class Client:
         try:
             result = self.request("initialize")
             self.capabilities = {}
-            self.capabilities["completion_capable"] = result["capabilities"]["capability"]["completionProvider"]["resolveProvider"]
-            self.capabilities["hover_capable"] = result["capabilities"]["capability"]["hoverProvider"]
-            self.capabilities["document_formatting_capable"] = result["capabilities"]["capability"]["documentFormattingProvider"]
+            completion = result["capabilities"]["capability"].get(
+                "completionProvider")
+            if completion:
+                self.capabilities["completion_capable"] = completion["resolveProvider"]
+            else:
+                logger.warning("no completion provider")
+            hover = result["capabilities"]["capability"].get("hoverProvider")
+            if hover:
+                self.capabilities["hover_capable"] = hover
+            else:
+                logger.warning("no hover provider")
+            formatting = result["capabilities"]["capability"].get(
+                "documentFormattingProvider")
+            if formatting:
+                self.capabilities["document_formatting_capable"] = formatting
+            else:
+                logger.warning("no formatting provider")
+            logger.debug(self.capabilities)
 
-        except(ValueError, KeyError, TypeError):
+        except(ValueError, KeyError, TypeError) as e:
+            logger.error(e)
             pass
 
     def exit(self):
         try:
             self.request("exit")
-        except(ValueError, KeyError, TypeError):
+        except(ValueError, KeyError, TypeError) as e:
+            logger.warning(e)
             pass
 
     def restart_server(self):
@@ -255,51 +289,70 @@ class Client:
 
     def workspace_config_change(self, config):
         if not self.capabilities:
-            print("not initialized")
+            logger.info("not initialized")
             return None
         if config == self.config:
             return
         self.config = config
+        logger.debug(self.config)
         params = {"DidChangeConfigurationParams": {"settings": config}}
-        result = self.request("workspace/didChangeConfiguration", params)
+        self.request("workspace/didChangeConfiguration", params)
 
     def complete(self, source, line, character):
-        if not self.capabilities:
-            print("not initialized")
-            return
-        if not self.capabilities["completion_capable"]:
-            print("no completion available")
-            return
-        params = {"textDocument": {"uri": source}, "position": {
-            "line": line, "character": character}}
-        result = self.request("textDocument/completion", params)
-        if not result:
+        try:
+            if not self.capabilities:
+                # print("not initialized")
+                logger.error("not initialized")
+                return
+            if not self.capabilities["completion_capable"]:
+                # print("no completion available")
+                logger.error("no completion available")
+                return
+            params = {"textDocument": {"uri": source}, "position": {
+                "line": line, "character": character}}
+            result = self.request("textDocument/completion", params)
+            logger.debug(result)
+            if not result:
+                return None
+            return result
+        except Exception as e:
             return None
-        return result
 
     def hover(self, source, line, character):
-        if not self.capabilities:
-            print("not initialized")
-            return
-        if not self.capabilities["hover_capable"]:
-            print("no hover available")
-            return
-        params = {"textDocument": {"uri": source}, "position": {
-            "line": line, "character": character}}
-        result = self.request("textDocument/hover", params)
-        if not result:
+        try:
+            if not self.capabilities:
+                # print("not initialized")
+                logger.error("not initialized")
+                return
+            if not self.capabilities["hover_capable"]:
+                # print("no hover available")
+                logger.error("no hover available")
+                return
+            params = {"textDocument": {"uri": source}, "position": {
+                "line": line, "character": character}}
+            result = self.request("textDocument/hover", params)
+            logger.debug(result)
+            if not result:
+                return None
+            return result
+        except Exception as e:
             return None
-        return result
 
     def formatting(self, source):
-        if not self.capabilities:
-            print("not initialized")
-            return
-        if not self.capabilities["document_formatting_capable"]:
-            print("no document_formatting available")
-            return
-        params = {"textDocument": {"uri": source}}
-        result = self.request("textDocument/formatting", params)
-        if not result:
+        try:
+            if not self.capabilities:
+                # print("not initialized")
+                logger.error("not initialized")
+                return
+            if not self.capabilities["document_formatting_capable"]:
+                # print("no document_formatting available")
+                logger.error("no document_formatting available")
+                return
+            params = {"textDocument": {"uri": source}}
+            result = self.request("textDocument/formatting", params)
+            logger.debug(result)
+            if not result:
+                return None
+            return result
+        except Exception as e:
             return None
-        return result
