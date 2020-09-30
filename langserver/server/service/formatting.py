@@ -59,12 +59,13 @@ class Formatting:
             diff = difflib.unified_diff(old_src, new_src)
 
             TextEdit_l = []
-            lines = [line for line in diff]
+            # lines = [line for line in diff]
             sub = ()
             index = -1
             line_index = 0
 
-            for line in lines:
+            # for line in lines:
+            for line in diff:
                 line_index += 1
                 if line.startswith("@"):
                     index += 1
