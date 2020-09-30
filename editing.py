@@ -63,9 +63,12 @@ class PytoolsFormatCommand(sublime_plugin.TextCommand):
 
         global clientHub
         if not clientHub.capabilities:
+            env["PATH"] = os.pathsep + env['PATH']
+            clientHub.change_python(python=python, env=env)
             clientHub.initialize()
         result = clientHub.formatting(src)
         formatting.update_edit(view, edit, result)
+        view.erase_status("lsp_process")
 
     def is_visible(self):
         view = self.view

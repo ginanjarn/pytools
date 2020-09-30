@@ -6,6 +6,9 @@ import threading
 import random
 import logging
 
+logging.basicConfig(format='%(levelname)s: %(asctime)s  %(name)s: %(message)s')
+logger = logging.getLogger(__name__)
+
 
 def pack(content: str) -> bytes:
     """Pack string content to binary.
@@ -99,8 +102,10 @@ class Client:
             filepath = os.path.abspath(__file__)
             path_list = filepath.split(os.sep)
             serverpath = os.sep.join(path_list[:-2]+["server", "main.py"])
+            logger.debug(serverpath)
             return serverpath
         run_server_cmd = [self.python, get_server()]
+        logger.debug(run_server_cmd)
         if os.name == "nt":
             # linux subprocess module does not have STARTUPINFO
             # so only use it if on Windows
@@ -116,8 +121,11 @@ class Client:
 
         _, serr = server_proc.communicate()
         if server_proc.returncode != 0:
-            logging.error(serr.decode())
             self._server_error = True
+            logger.critical(serr.decode())
+            return
+        else:
+            logger.info("server running")
             return
 
     def _request(self, content: str) -> (str, any):
@@ -163,13 +171,14 @@ class Client:
                         break
                     else:
                         content = result
-                        print(len(content))
+                        logger.debug(content)
+                        # print(len(content))
                         # print(content)
                         break
             return content, error
 
         except (ConnectionRefusedError, ConnectionResetError) as e:
-            logging.warning(e)
+            logger.error(e)
             return "", ErrorCodes.serverErrorStart
 
     def request(self, method, params=None) -> any:
@@ -177,7 +186,7 @@ class Client:
             req_id = str(random.random())
             msg = {"jsonrpc": "2.0", "id": req_id,
                    "method": method, "params": params}
-
+            logger.debug("request message = {}".format(msg))
             msg_str = json.dumps(msg)
             result, err = self._request(msg_str)
             if err:
@@ -207,13 +216,13 @@ class Client:
                                 break
 
                 else:
-                    print("results error", repr(err))
+                    # print("results error", repr(err))
+                    logger.error("results error {}".format(repr(err)))
                     return
             result = json.loads(result)
-            # print(result)
+            logger.debug("results = {}".format(result))
             if result["id"] != req_id:
-                print(
-                    "invalid response id. want {} ->> {}".format(req_id, result["id"]))
+                logger.error("invalid request id, want %s expected %s"%(req_id,result["id"]))
                 return
 
             # terminate on success terminate server
@@ -231,6 +240,7 @@ class Client:
         self._server_started = False
         self.capabilities = None
         self.config = {}
+        logger.info("server terminated")
 
     def test_conn(self, message=""):
         result, err = self._request(message)
@@ -246,23 +256,30 @@ class Client:
                 "completionProvider")
             if completion:
                 self.capabilities["completion_capable"] = completion["resolveProvider"]
+            else:
+                logger.warning("no completion provider")
             hover = result["capabilities"]["capability"].get("hoverProvider")
             if hover:
                 self.capabilities["hover_capable"] = hover
+            else:
+                logger.warning("no hover provider")
             formatting = result["capabilities"]["capability"].get(
                 "documentFormattingProvider")
             if formatting:
                 self.capabilities["document_formatting_capable"] = formatting
+            else:
+                logger.warning("no formatting provider")
+            logger.debug(self.capabilities)
 
         except(ValueError, KeyError, TypeError) as e:
-            logging.error(e)
+            logger.error(e)
             pass
 
     def exit(self):
         try:
             self.request("exit")
         except(ValueError, KeyError, TypeError) as e:
-            logging.warning(e)
+            logger.warning(e)
             pass
 
     def restart_server(self):
@@ -271,26 +288,28 @@ class Client:
 
     def workspace_config_change(self, config):
         if not self.capabilities:
-            print("not initialized")
+            logger.info("not initialized")
             return None
         if config == self.config:
             return
         self.config = config
+        logger.debug(self.config)
         params = {"DidChangeConfigurationParams": {"settings": config}}
-        result = self.request("workspace/didChangeConfiguration", params)
+        self.request("workspace/didChangeConfiguration", params)
 
     def complete(self, source, line, character):
         if not self.capabilities:
             # print("not initialized")
-            logging.error("not initialized")
+            logger.error("not initialized")
             return
         if not self.capabilities["completion_capable"]:
             # print("no completion available")
-            logging.error("no completion available")
+            logger.error("no completion available")
             return
         params = {"textDocument": {"uri": source}, "position": {
             "line": line, "character": character}}
         result = self.request("textDocument/completion", params)
+        logger.debug(result)
         if not result:
             return None
         return result
@@ -298,15 +317,16 @@ class Client:
     def hover(self, source, line, character):
         if not self.capabilities:
             # print("not initialized")
-            logging.error("not initialized")
+            logger.error("not initialized")
             return
         if not self.capabilities["hover_capable"]:
             # print("no hover available")
-            logging.error("no hover available")
+            logger.error("no hover available")
             return
         params = {"textDocument": {"uri": source}, "position": {
             "line": line, "character": character}}
         result = self.request("textDocument/hover", params)
+        logger.debug(result)
         if not result:
             return None
         return result
@@ -314,14 +334,15 @@ class Client:
     def formatting(self, source):
         if not self.capabilities:
             # print("not initialized")
-            logging.error("not initialized")
+            logger.error("not initialized")
             return
         if not self.capabilities["document_formatting_capable"]:
             # print("no document_formatting available")
-            logging.error("no document_formatting available")
+            logger.error("no document_formatting available")
             return
         params = {"textDocument": {"uri": source}}
         result = self.request("textDocument/formatting", params)
+        logger.debug(result)
         if not result:
             return None
         return result
