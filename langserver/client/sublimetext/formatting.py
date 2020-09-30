@@ -22,6 +22,7 @@ def applyUpdate(src, update):
         if not update:
             return
         lines = src.split("\n")
+        lines = (l for l in lines)
         line_i, update_i = 0, 0
         new_src = []
         pass_insert = False
