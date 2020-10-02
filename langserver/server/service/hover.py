@@ -46,24 +46,45 @@ class Hover:
                 return "<code>{} : {}</code>".format(type_, name)
 
             module_path = data.module_path if data.module_path else ""
+            module_name = data.module_name
             definition = "{}:{}:{}".format(module_path, data.line, data.column)
+            logger.debug(definition)
             doc = data.docstring()
+            logger.debug(doc)
             doc = html.escape(doc, quote=False)
 
-            head = "<code>{} : <a href=\"{}\">{}</a></code>".format(
-                type_, definition, name)
+            # head = "<code>{} : <a href=\"{}\">{}</a></code>".format(
+                # type_, definition, name)
 
-            doc_lines = doc.split("\n")
-            title = doc_lines[0]
-            title = "<h4>{}</h4>".format(title)
-            body = doc_lines[1:]
-            def wrap_p(line): return "<p>{}</p>".format(line)
-            def wrap_p_tab(line): return "<p style=\"margin-left: 1em\">{}</p>".format(line)
-            def mark(line): return wrap_p_tab(line) if line.startswith("    ") else wrap_p(line)
-            body = [mark(line) for line in body]
-            result = "".join([head, title]+body)
-            logger.debug(result)
-            return result
+            # doc_lines = doc.split("\n")
+            # title = doc_lines[0]
+            # title = "<h4>{}</h4>".format(title)
+            # body = doc_lines[1:]
+            # def wrap_p(line): return "<p>{}</p>".format(line)
+            # def wrap_p_tab(line): return "<p style=\"margin-left: 1em\">{}</p>".format(line)
+            # def mark(line): return wrap_p_tab(line) if line.startswith("    ") else wrap_p(line)
+            # body = [mark(line) for line in body]
+            # result = "".join([head, title]+body)
+            # logger.debug(result)
+            # return result
+            doc_body = doc.split("\n\n")
+            doc_body_l = []
+            
+            f_doc_head = "<code>%s : <a href=\"%s\">%s.%s</a></code>"%(type_,definition,module_name,name)
+            doc_body_l.append(f_doc_head)
+            doc_title = doc_body[0]
+            f_doc_title = "<h4>%s</h4>"%doc_title
+            doc_body_l.append(f_doc_title)
+            if len(doc_body)>1:
+                doc_content = doc_body[1:]
+                for content in doc_content:
+                    content_line = content.split("\n")
+                    f_content = "</br>".join(content_line)
+                f_doc_content = "<p>%s</p>"%f_content
+                doc_body_l.append(f_doc_content)
+            f_doc_body = "".join(doc_body_l)
+            logger.debug(f_doc_body)
+            return f_doc_body
         except Exception as e:
             logger.error(e)
             return ""
