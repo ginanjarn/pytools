@@ -17,9 +17,9 @@ class Completion:
         settings = kwargs.get("settings", {})
         try:
             path = settings["jedi"]["project"]["path"]
-            # print(path)
             logger.debug(path)
         except KeyError:
+            logger.warning("invalid project settings",exc_info=True)
             path = ""
 
         self.project = Project(path=path)
@@ -36,5 +36,5 @@ class Completion:
                 completion_list.append(completion)
             return completion_list, None
         except ValueError as e:
-            logger.error(e)
+            logger.error("completing error",exc_info=True)
             return None, str(e)

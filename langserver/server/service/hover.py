@@ -19,6 +19,7 @@ class Hover:
             path = settings["jedi"]["project"]["path"]
             logger.debug(path)
         except KeyError:
+            logger.error("invalid project settings", exc_info=True)
             path = ""
 
         self.project = Project(path=path)
@@ -57,7 +58,9 @@ class Hover:
             title = "<h4>{}</h4>".format(title)
             body = doc_lines[1:]
             def wrap_p(line): return "<p>{}</p>".format(line)
-            body = [wrap_p(line) for line in body]
+            def wrap_p_tab(line): return "<p style=\"margin-left: 1em\">{}</p>".format(line)
+            def mark(line): return wrap_p_tab(line) if line.startswith("    ") else wrap_p(line)
+            body = [mark(line) for line in body]
             result = "".join([head, title]+body)
             logger.debug(result)
             return result
