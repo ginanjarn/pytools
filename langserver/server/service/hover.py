@@ -47,7 +47,7 @@ class Hover:
 
             module_path = data.module_path if data.module_path else ""
             module_name = data.module_name
-            definition = "{}:{}:{}".format(module_path, data.line, data.column)
+            definition = "{}:{}:{}".format(module_path, data.line, data.column + 1)
             logger.debug(definition)
             doc = data.docstring()
             logger.debug(doc)
