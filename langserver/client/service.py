@@ -101,7 +101,8 @@ class Client:
         def get_server():
             filepath = os.path.abspath(__file__)
             path_list = filepath.split(os.sep)
-            serverpath = os.sep.join(path_list[:-2]+["server", "main.py"])
+            serverpath = os.sep.join(path_list[:-2]+["server", "main_v2.py"])
+            # serverpath = os.sep.join(path_list[:-2]+["server", "main.py"])
             logger.debug(serverpath)
             return serverpath
         run_server_cmd = [self.python, get_server()]
