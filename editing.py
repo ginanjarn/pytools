@@ -4,8 +4,12 @@ import difflib
 import subprocess
 import threading
 import os
+import logging
 from .langserver.client.service import Client  # pylint: disable=relative-beyond-top-level
 from .langserver.client.sublimetext import completion, hover, formatting  # pylint: disable=relative-beyond-top-level
+
+logging.basicConfig(format='%(levelname)s: %(asctime)s  %(name)s: %(message)s')
+logger = logging.getLogger(__name__)
 
 
 def plugin_loaded():
@@ -20,14 +24,27 @@ def plugin_loaded():
 
 def load_settings(key):
     s = sublime.load_settings("Pytools.sublime-settings")
-    return s.get(key)
+    value = s.get(key)
+    if not value:
+        logger.error("setting %s not found", key)
+        return None
+    return value
 
 
 def get_sysenv():
     new_paths = load_settings("path")
+
+    if new_paths == None:
+        logger.error("python environment not configured")
+        return
+
     env = os.environ.copy()
-    env['PATH'] = new_paths + os.path.pathsep + env['PATH']
-    return env
+    try:
+        env['PATH'] = new_paths + os.path.pathsep + env['PATH']
+        return env
+    except Exception as e:
+        logger.error("invalid environment value", exc_info=True)
+        return None
 
 
 class ClientHub:
@@ -61,8 +78,17 @@ class PytoolsFormatCommand(sublime_plugin.TextCommand):
         python = load_settings("python")
         env = get_sysenv()
 
+        if python == None and env == None:
+            logger.warning("python environment not configured")
+            msg = "Python environment not configured.\nSetup now?"
+            setup = sublime.ok_cancel_dialog(msg, "Yes")
+            if setup:
+                view.run_command("pytools_environment_setup")
+            return
+
         global clientHub
         if not clientHub.capabilities:
+            logger.warning("not initialized")
             env["PATH"] = os.pathsep + env['PATH']
             clientHub.change_python(python=python, env=env)
             clientHub.initialize()
@@ -88,6 +114,15 @@ class Pytools(sublime_plugin.EventListener):
         global clientHub
         python = load_settings("python")
         env = get_sysenv()
+
+        if python == None and env == None:
+            logger.warning("python environment not configured")
+            msg = "Python environment not configured.\nSetup now?"
+            setup = sublime.ok_cancel_dialog(msg, "Yes")
+            if setup:
+                view.run_command("pytools_environment_setup")
+            return
+
         env["PATH"] = os.pathsep + env['PATH']
         clientHub.change_python(python=python, env=env)
         if not clientHub.capabilities:
@@ -104,6 +139,7 @@ class Pytools(sublime_plugin.EventListener):
         global clientHub
         self.preprocess_lsp(view)
         raw_completion = clientHub.complete(src, row, col)
+        logger.debug(raw_completion)
         completions = completion.format_code(raw_completion)
         if completions:
             self.completions = completions
@@ -179,6 +215,7 @@ class Pytools(sublime_plugin.EventListener):
         global clientHub
         self.preprocess_lsp(view)
         raw_help = clientHub.hover(src, line, col)
+        logger.debug(raw_help)
         help_data = hover.format_code(raw_help)
         hover.show_popup(view=view, content=help_data, location=point)
         # release lock
@@ -211,6 +248,7 @@ class PytoolsResetserverCommand(sublime_plugin.TextCommand):
     def exit_thread(self):
         global clientHub
         clientHub.exit()
+        logger.info("server terminated")
 
     def is_visible(self):
         view = self.view
