@@ -1,6 +1,7 @@
 import socket
 import json
 import argparse
+import re
 from service import completion, hover, formatting  # pylint: disable=import-error
 import logging
 
@@ -35,21 +36,18 @@ def unpack(raw: bytes) -> (any, any):
         logger.error("invalid head and body")
         return "", ErrorEncoding.InvalidData
     head = raw_l[0]
-    head_l = head.split("\r\n")
-    if len(head_l) == 0:
-        logger.error("head empty")
-        return "", ErrorEncoding.HeaderEmpty
-    cnt_len = 0
-    for row in head_l:
-        cols = row.split(": ")
-        if len(cols) != 2:
-            logger.warning("invalid key-value field")
-            break
-        logger.debug("key: %s, value:%s", cols[0], cols[1])
-        if cols[0] == "Content-Length":
-            cnt_len = int(cols[1])
-            logger.info("Content-Length = %s", cnt_len)
-            break
+    logger.debug("header = %s",head)
+    try:
+        contentLength = re.findall(r"Content-Length: (\d*)",head)
+        logger.debug("content length = %s", contentLength)
+        if len(contentLength) == 0:
+            return "", ErrorEncoding.HeaderEmpty
+        cnt_len = int(contentLength[0])
+        logger.debug("content length = %s",cnt_len)
+    except Exception:
+        logger.error("invalid header", exc_info=True)
+        return "", ErrorEncoding.InvalidData
+
     body = raw_l[1]
     if len(body) < cnt_len:
         logger.debug(body)

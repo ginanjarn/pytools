@@ -1,6 +1,7 @@
 import socket
 import json
 import os
+import re
 import subprocess
 import threading
 import random
@@ -47,27 +48,37 @@ def unpack(raw: bytes) -> (any, any):
         string content result, or None if content overflow
     error: any
         error message if occured, or None"""
+    if not raw:
+        logger.error("empty raw data")
+        return "", Encoding.InvalidData
     raw_l = raw.decode("ascii").split("\r\n\r\n")
     if len(raw_l) != 2:
+        logger.error("invalid head and body")
         return "", Encoding.InvalidData
     head = raw_l[0]
-    head_l = head.split("\r\n")
-    if len(head_l) == 0:
-        return "", Encoding.HeaderEmpty
-    cnt_len = 0
-    for row in head_l:
-        cols = row.split(": ")
-        if len(cols) != 2:
-            break
-        if cols[0] == "Content-Length":
-            cnt_len = int(cols[1])
-            break
+    logger.debug("header = %s", head)
+    try:
+        contentLength = re.findall(r"Content-Length: (\d*)", head)
+        logger.debug("content length = %s", contentLength)
+        if len(contentLength) == 0:
+            return "", Encoding.HeaderEmpty
+        cnt_len = int(contentLength[0])
+        logger.debug("content length = %s", cnt_len)
+    except Exception:
+        logger.error("invalid header", exc_info=True)
+        return "", Encoding.InvalidData
+
     body = raw_l[1]
     if len(body) < cnt_len:
+        logger.debug(body)
+        logger.info("data incomplete")
         return "", Encoding.ContentIncomplete
     elif len(body) > cnt_len:
+        logger.debug(body)
+        logger.error("data larger than Content-Length")
         return None, Encoding.ContentOverflow
     else:
+        logger.debug(body)
         return body, None
 
 
