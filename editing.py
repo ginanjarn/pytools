@@ -4,6 +4,7 @@ import difflib
 import subprocess
 import threading
 import os
+import hashlib
 import logging
 from .langserver.client.service import Client  # pylint: disable=relative-beyond-top-level
 from .langserver.client.sublimetext import completion, hover, formatting  # pylint: disable=relative-beyond-top-level
@@ -109,6 +110,8 @@ class Pytools(sublime_plugin.EventListener):
         self.lsp_client = None
         self.lsp_process_count = 0
         self._old_prefix = ""
+        self.cached_completion = {}
+        # self.cached_completion_params = {}
 
     def preprocess_lsp(self, view):
         global clientHub
@@ -135,6 +138,23 @@ class Pytools(sublime_plugin.EventListener):
         cursor = locations[0]
         src = view.substr(sublime.Region(0, cursor))
         row, col = view.rowcol(cursor)
+        word_offset = view.word(cursor).a
+        code_token = "%s:%s"%(view.file_name(),word_offset)
+
+        cached_completion = self.cached_completion.get(code_token)
+        if cached_completion:
+            source_digest = hashlib.md5(src.encode()).hexdigest()
+            completions, token = cached_completion
+            if source_digest == token:
+                self.completions = completions
+                self._old_prefix = prefix
+                self.open_query_completions(view)
+                # release lock
+                self.lsp_process_count -= 1
+                view.erase_status("lsp_process")
+                return
+            else:
+                del self.cached_completion[code_token]
 
         global clientHub
         self.preprocess_lsp(view)
@@ -142,6 +162,8 @@ class Pytools(sublime_plugin.EventListener):
         logger.debug(raw_completion)
         completions = completion.format_code(raw_completion)
         if completions:
+            source_digest = hashlib.md5(src.encode()).hexdigest()            
+            self.cached_completion[code_token] = (completions,source_digest)
             self.completions = completions
             self._old_prefix = prefix
             self.open_query_completions(view)
