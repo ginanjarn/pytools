@@ -136,16 +136,18 @@ class Pytools(sublime_plugin.EventListener):
 
     def fetch_completions(self, view, prefix, locations):
         cursor = locations[0]
-        src = view.substr(sublime.Region(0, cursor))
-        row, col = view.rowcol(cursor)
-        word_offset = view.word(cursor).a
-        if src.endswith("."):
-            word_offset = cursor
-        code_token = "%s:%s"%(view.file_name(),word_offset)
-        logger.debug(code_token)
+        word = view.word(cursor)
 
-        trigger_region = sublime.Region(word_offset,cursor)
-        # logger.debug("completion word = %s, at %s",view.substr(trigger_region),trigger_region)
+        word_offset = word.a
+        src = view.substr(sublime.Region(0, word_offset))
+        logger.debug(view.substr(word))
+        if view.substr(word) == ".":
+            word_offset = cursor
+            src = view.substr(sublime.Region(0, word_offset))
+
+        row, col = view.rowcol(word_offset)
+        code_token = "%s:%s" % (view.file_name(), word_offset)
+        logger.debug(code_token)
 
         cached_completion = self.cached_completion.get(code_token)
         if cached_completion:
@@ -159,17 +161,20 @@ class Pytools(sublime_plugin.EventListener):
                 view.erase_status("lsp_process")
                 return
             else:
+                logger.debug("code changed")
                 del self.cached_completion[code_token]
                 del self.cached_completion_params[code_token]
 
+        logger.debug("no cached_completion")
         global clientHub
         self.preprocess_lsp(view)
         raw_completion = clientHub.complete(src, row, col)
         # logger.debug(raw_completion)
         completions = completion.format_code(raw_completion)
-        params =completion.get_params(raw_completion)
+        params = completion.get_params(raw_completion)
+        logger.debug("fetch_completions")
         if completions:
-            self.cached_completion[code_token] = (completions,src)
+            self.cached_completion[code_token] = (completions, src)
             self.cached_completion_params[code_token] = (params, src)
             self.completions = completions
             self._old_prefix = prefix
