@@ -58,7 +58,7 @@ def unpack(raw: bytes) -> (any, any):
         logger.error("data larger than Content-Length")
         return None, ErrorEncoding.ContentOverflow
     else:
-        logger.debug(body)
+        # logger.debug(body)
         return body, None
 
 

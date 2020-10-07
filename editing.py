@@ -4,13 +4,13 @@ import difflib
 import subprocess
 import threading
 import os
-import hashlib
 import logging
 from .langserver.client.service import Client  # pylint: disable=relative-beyond-top-level
 from .langserver.client.sublimetext import completion, hover, formatting  # pylint: disable=relative-beyond-top-level
 
 logging.basicConfig(format='%(levelname)s: %(asctime)s  %(name)s: %(message)s')
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 def plugin_loaded():
@@ -111,7 +111,7 @@ class Pytools(sublime_plugin.EventListener):
         self.lsp_process_count = 0
         self._old_prefix = ""
         self.cached_completion = {}
-        # self.cached_completion_params = {}
+        self.cached_completion_params = {}
 
     def preprocess_lsp(self, view):
         global clientHub
@@ -139,13 +139,18 @@ class Pytools(sublime_plugin.EventListener):
         src = view.substr(sublime.Region(0, cursor))
         row, col = view.rowcol(cursor)
         word_offset = view.word(cursor).a
+        if src.endswith("."):
+            word_offset = cursor
         code_token = "%s:%s"%(view.file_name(),word_offset)
+        logger.debug(code_token)
+
+        trigger_region = sublime.Region(word_offset,cursor)
+        # logger.debug("completion word = %s, at %s",view.substr(trigger_region),trigger_region)
 
         cached_completion = self.cached_completion.get(code_token)
         if cached_completion:
-            source_digest = hashlib.md5(src.encode()).hexdigest()
-            completions, token = cached_completion
-            if source_digest == token:
+            completions, old_src = cached_completion
+            if src == old_src:
                 self.completions = completions
                 self._old_prefix = prefix
                 self.open_query_completions(view)
@@ -155,15 +160,17 @@ class Pytools(sublime_plugin.EventListener):
                 return
             else:
                 del self.cached_completion[code_token]
+                del self.cached_completion_params[code_token]
 
         global clientHub
         self.preprocess_lsp(view)
         raw_completion = clientHub.complete(src, row, col)
-        logger.debug(raw_completion)
+        # logger.debug(raw_completion)
         completions = completion.format_code(raw_completion)
+        params =completion.get_params(raw_completion)
         if completions:
-            source_digest = hashlib.md5(src.encode()).hexdigest()            
-            self.cached_completion[code_token] = (completions,source_digest)
+            self.cached_completion[code_token] = (completions,src)
+            self.cached_completion_params[code_token] = (params, src)
             self.completions = completions
             self._old_prefix = prefix
             self.open_query_completions(view)
