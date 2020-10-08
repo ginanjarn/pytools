@@ -22,7 +22,7 @@ def get_params(data: list) -> any:
         if not data:
             return None
 
-        params_data = []
+        params_data = {}
         for cmpl in data:
             logger.debug(cmpl)
             try:
@@ -30,8 +30,8 @@ def get_params(data: list) -> any:
                 params = cmpl["data"]["params"]
                 for param in params:
                     params_l.append(
-                        ["%s\t%s" % (param["label"], param["kind"]), "%s=" % (param["label"])])
-                params_data.append({"name": cmpl["label"], "data": params_l})
+                        ["%s\t%s" % ("%s="%(param["label"]), param["kind"]), "%s=" % (param["label"])])
+                params_data[cmpl["label"]]= params_l
             except Exception:
                 # logger.warning("error parsing item", exc_info=True)
                 pass

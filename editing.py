@@ -147,7 +147,38 @@ class Pytools(sublime_plugin.EventListener):
 
         row, col = view.rowcol(word_offset)
         code_token = "%s:%s" % (view.file_name(), word_offset)
-        logger.debug(code_token)
+        logger.debug("code_token = %s",code_token)
+
+        if view.match_selector(cursor,"source.python meta.function-call.arguments.python"):
+            logger.debug("inside function-call")
+            func_regions = view.find_by_selector("source.python meta.function-call.arguments.python")
+            func_region = [r for r in func_regions if r.a<cursor<r.b]
+            if len(func_region)>0:
+                logger.debug(func_region[0])
+                func = view.word(func_region[0].a-2)
+                param_token = "%s:%s"%(view.file_name(),func.a)
+                logger.debug("param token : %s",param_token)
+                cached_params = self.cached_completion_params.get(param_token)
+                if cached_params:
+                    logger.debug("cached_params available")
+                    completions, old_src = cached_params
+                    src = view.substr(sublime.Region(0,func.a))
+                    logger.debug("is equal => %s ? %s",src[-5:], old_src[-5:])
+                    if src == old_src:
+                        logger.debug(completions)
+                        self.completions = completions[view.substr(func)]
+                        logger.debug("completion params => %s",self.completions)
+                        self._old_prefix = prefix
+                        self.open_query_completions(view)
+                        # release lock
+                        self.lsp_process_count -= 1
+                        view.erase_status("lsp_process")
+                        return
+
+            # release completing, return nothing
+            self.lsp_process_count -= 1
+            view.erase_status("lsp_process")
+            return
 
         cached_completion = self.cached_completion.get(code_token)
         if cached_completion:
