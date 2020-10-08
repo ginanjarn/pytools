@@ -136,14 +136,16 @@ class Pytools(sublime_plugin.EventListener):
 
     def fetch_completions(self, view, prefix, locations):
         cursor = locations[0]
+        src = view.substr(sublime.Region(0, cursor))
         word = view.word(cursor)
 
         word_offset = word.a
-        src = view.substr(sublime.Region(0, word_offset))
         logger.debug(view.substr(word))
+        # FIXME: invalid cursor on dot(".") character
+
         if view.substr(word) == ".":
             word_offset = cursor
-            src = view.substr(sublime.Region(0, word_offset))
+            # src = view.substr(sublime.Region(0, word_offset))
 
         row, col = view.rowcol(word_offset)
         code_token = "%s:%s" % (view.file_name(), word_offset)
@@ -162,7 +164,8 @@ class Pytools(sublime_plugin.EventListener):
                 if cached_params:
                     logger.debug("cached_params available")
                     completions, old_src = cached_params
-                    src = view.substr(sublime.Region(0,func.a))
+                    # src = view.substr(sublime.Region(0,func.a))
+                    src = src[:func.a]
                     logger.debug("is equal => %s ? %s",src[-5:], old_src[-5:])
                     if src == old_src:
                         logger.debug(completions)
@@ -183,7 +186,7 @@ class Pytools(sublime_plugin.EventListener):
         cached_completion = self.cached_completion.get(code_token)
         if cached_completion:
             completions, old_src = cached_completion
-            if src == old_src:
+            if src[:word_offset] == old_src:
                 self.completions = completions
                 self._old_prefix = prefix
                 self.open_query_completions(view)
@@ -199,14 +202,14 @@ class Pytools(sublime_plugin.EventListener):
         logger.debug("no cached_completion")
         global clientHub
         self.preprocess_lsp(view)
-        raw_completion = clientHub.complete(src, row, col)
+        raw_completion = clientHub.complete(src[:word_offset], row, col)
         # logger.debug(raw_completion)
         completions = completion.format_code(raw_completion)
         params = completion.get_params(raw_completion)
         logger.debug("fetch_completions")
         if completions:
-            self.cached_completion[code_token] = (completions, src)
-            self.cached_completion_params[code_token] = (params, src)
+            self.cached_completion[code_token] = (completions, src[:word_offset])
+            self.cached_completion_params[code_token] = (params, src[:word_offset])
             self.completions = completions
             self._old_prefix = prefix
             self.open_query_completions(view)
