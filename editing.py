@@ -4,8 +4,13 @@ import difflib
 import subprocess
 import threading
 import os
+import logging
 from .langserver.client.service import Client  # pylint: disable=relative-beyond-top-level
 from .langserver.client.sublimetext import completion, hover, formatting  # pylint: disable=relative-beyond-top-level
+
+logging.basicConfig(format='%(levelname)s: %(asctime)s  %(name)s: %(message)s')
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 def plugin_loaded():
@@ -20,14 +25,27 @@ def plugin_loaded():
 
 def load_settings(key):
     s = sublime.load_settings("Pytools.sublime-settings")
-    return s.get(key)
+    value = s.get(key)
+    if not value:
+        logger.error("setting %s not found", key)
+        return None
+    return value
 
 
 def get_sysenv():
     new_paths = load_settings("path")
+
+    if new_paths == None:
+        logger.error("python environment not configured")
+        return
+
     env = os.environ.copy()
-    env['PATH'] = new_paths + os.path.pathsep + env['PATH']
-    return env
+    try:
+        env['PATH'] = new_paths + os.path.pathsep + env['PATH']
+        return env
+    except Exception as e:
+        logger.error("invalid environment value", exc_info=True)
+        return None
 
 
 class ClientHub:
@@ -61,8 +79,17 @@ class PytoolsFormatCommand(sublime_plugin.TextCommand):
         python = load_settings("python")
         env = get_sysenv()
 
+        if python == None and env == None:
+            logger.warning("python environment not configured")
+            msg = "Python environment not configured.\nSetup now?"
+            setup = sublime.ok_cancel_dialog(msg, "Yes")
+            if setup:
+                view.run_command("pytools_environment_setup")
+            return
+
         global clientHub
         if not clientHub.capabilities:
+            logger.warning("not initialized")
             env["PATH"] = os.pathsep + env['PATH']
             clientHub.change_python(python=python, env=env)
             clientHub.initialize()
@@ -83,11 +110,22 @@ class Pytools(sublime_plugin.EventListener):
         self.lsp_client = None
         self.lsp_process_count = 0
         self._old_prefix = ""
+        self.cached_completion = {}
+        # self.cached_completion_params = {}
 
     def preprocess_lsp(self, view):
         global clientHub
         python = load_settings("python")
         env = get_sysenv()
+
+        if python == None and env == None:
+            logger.warning("python environment not configured")
+            msg = "Python environment not configured.\nSetup now?"
+            setup = sublime.ok_cancel_dialog(msg, "Yes")
+            if setup:
+                view.run_command("pytools_environment_setup")
+            return
+
         env["PATH"] = os.pathsep + env['PATH']
         clientHub.change_python(python=python, env=env)
         if not clientHub.capabilities:
@@ -99,13 +137,43 @@ class Pytools(sublime_plugin.EventListener):
     def fetch_completions(self, view, prefix, locations):
         cursor = locations[0]
         src = view.substr(sublime.Region(0, cursor))
-        row, col = view.rowcol(cursor)
 
+        word = view.word(cursor)
+        word_offset = word.a
+        if src.endswith("."):
+            word_offset = cursor
+        if view.match_selector(cursor, "source.python meta.function-call.arguments.python"):
+            word_offset = cursor
+
+        row, col = view.rowcol(word_offset)
+        code_token = "%s:%s" % (view.file_name(), word_offset)
+        logger.debug(code_token)
+
+        cached_completion = self.cached_completion.get(code_token)
+        if cached_completion:
+            completions, old_src = cached_completion
+            if src[:word_offset] == old_src:
+                self.completions = completions
+                self._old_prefix = prefix
+                self.open_query_completions(view)
+                # release lock
+                self.lsp_process_count -= 1
+                view.erase_status("lsp_process")
+                return
+            else:
+                logger.debug("code changed")
+                del self.cached_completion[code_token]
+
+        logger.debug("no cached_completion")
         global clientHub
         self.preprocess_lsp(view)
-        raw_completion = clientHub.complete(src, row, col)
+        raw_completion = clientHub.complete(src[:word_offset], row, col)
+        # logger.debug(raw_completion)
         completions = completion.format_code(raw_completion)
+        logger.debug("fetch_completions")
         if completions:
+            self.cached_completion[code_token] = (
+                completions, src[:word_offset])
             self.completions = completions
             self._old_prefix = prefix
             self.open_query_completions(view)
@@ -179,6 +247,7 @@ class Pytools(sublime_plugin.EventListener):
         global clientHub
         self.preprocess_lsp(view)
         raw_help = clientHub.hover(src, line, col)
+        logger.debug(raw_help)
         help_data = hover.format_code(raw_help)
         hover.show_popup(view=view, content=help_data, location=point)
         # release lock
@@ -211,6 +280,7 @@ class PytoolsResetserverCommand(sublime_plugin.TextCommand):
     def exit_thread(self):
         global clientHub
         clientHub.exit()
+        logger.info("server terminated")
 
     def is_visible(self):
         view = self.view

@@ -8,9 +8,8 @@ def format_code(data: list) -> any:
     try:
         if not data:
             return None
-
         parse = [("{}\t{}".format(cmpl["label"], cmpl["kind"]), cmpl["label"])
-                  for cmpl in data]
+                 for cmpl in data]
         return parse
     except Exception as e:
         logger.error(e)
