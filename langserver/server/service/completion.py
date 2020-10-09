@@ -33,17 +33,7 @@ class Completion:
             for r in result:
                 completion = {}
                 completion["label"] = r.name_with_symbols
-                completion["kind"] = r.type
-                completion["data"] = None
-                sg = r.get_signatures()
-                for s in sg:
-                    completion["data"] = {"params" : []}
-                    params = s.params
-                    for p in params:
-                        param = {}
-                        param["label"] = p.name
-                        param["kind"] = p.type
-                        completion["data"]["params"].append(param)
+                completion["kind"] = r.type                
                 completion_list.append(completion)
             return completion_list, None
         except ValueError as e:
