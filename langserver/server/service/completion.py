@@ -9,6 +9,7 @@ except ModuleNotFoundError:
 
 logging.basicConfig(format='%(levelname)s: %(asctime)s  %(name)s: %(message)s')
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 class Completion:
@@ -17,9 +18,9 @@ class Completion:
         settings = kwargs.get("settings", {})
         try:
             path = settings["jedi"]["project"]["path"]
-            # print(path)
             logger.debug(path)
         except KeyError:
+            logger.warning("invalid project settings",exc_info=True)
             path = ""
 
         self.project = Project(path=path)
@@ -32,9 +33,9 @@ class Completion:
             for r in result:
                 completion = {}
                 completion["label"] = r.name_with_symbols
-                completion["kind"] = r.type
+                completion["kind"] = r.type                
                 completion_list.append(completion)
             return completion_list, None
         except ValueError as e:
-            logger.error(e)
+            logger.error("completing error",exc_info=True)
             return None, str(e)

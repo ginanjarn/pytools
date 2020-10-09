@@ -19,6 +19,8 @@ class PytoolsEnvironmentSetupCommand(sublime_plugin.TextCommand):
         elif env_manager[index] == "venv":
             self.venv_setup()
 
+        self.view.run_command("pytools_set_environment")
+
     def conda_setup(self):
         HOME = "USERPROFILE" if os.name == "nt" else "HOME"
         HOME_path = os.environ[HOME]

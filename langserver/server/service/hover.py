@@ -19,6 +19,7 @@ class Hover:
             path = settings["jedi"]["project"]["path"]
             logger.debug(path)
         except KeyError:
+            logger.error("invalid project settings", exc_info=True)
             path = ""
 
         self.project = Project(path=path)
@@ -45,22 +46,33 @@ class Hover:
                 return "<code>{} : {}</code>".format(type_, name)
 
             module_path = data.module_path if data.module_path else ""
-            definition = "{}:{}:{}".format(module_path, data.line, data.column)
-            doc = data.docstring()
+            module_name = data.module_name
+            definition = "{}:{}:{}".format(
+                module_path, data.line, data.column + 1)
+            logger.debug(definition)
+            doc = data.docstring(raw=True)
+            logger.debug(doc)
             doc = html.escape(doc, quote=False)
 
-            head = "<code>{} : <a href=\"{}\">{}</a></code>".format(
-                type_, definition, name)
+            doc_body = doc.split("\n\n")
+            doc_body_l = []
 
-            doc_lines = doc.split("\n")
-            title = doc_lines[0]
-            title = "<h4>{}</h4>".format(title)
-            body = doc_lines[1:]
-            def wrap_p(line): return "<p>{}</p>".format(line)
-            body = [wrap_p(line) for line in body]
-            result = "".join([head, title]+body)
-            logger.debug(result)
-            return result
+            f_doc_head = "<code>%s : <a href=\"%s\">%s.%s</a></code>" % (
+                type_, definition, module_name, name)
+            doc_body_l.append(f_doc_head)
+            doc_title = doc_body[0]
+            f_doc_title = "<h4>%s</h4>" % doc_title
+            doc_body_l.append(f_doc_title)
+            if len(doc_body) > 1:
+                doc_content = doc_body[1:]
+                for content in doc_content:
+                    content_line = content.split("\n")
+                    f_content = "<br>".join(content_line)
+                f_doc_content = "<p>%s</p>" % f_content
+                doc_body_l.append(f_doc_content)
+            f_doc_body = "".join(doc_body_l)
+            logger.debug(f_doc_body)
+            return f_doc_body
         except Exception as e:
             logger.error(e)
             return ""
