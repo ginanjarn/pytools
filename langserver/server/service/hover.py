@@ -50,7 +50,7 @@ class Hover:
             definition = "{}:{}:{}".format(
                 module_path, data.line, data.column + 1)
             logger.debug(definition)
-            doc = data.docstring()
+            doc = data.docstring(raw=True)
             logger.debug(doc)
             doc = html.escape(doc, quote=False)
 
