@@ -140,7 +140,7 @@ class Pytools(sublime_plugin.EventListener):
 
         word = view.word(cursor)
         word_offset = word.a
-        if src.endswith("."):
+        if src.endswith(".") or src.endswith(""):
             word_offset = cursor
         if view.match_selector(cursor, "source.python meta.function-call.arguments.python"):
             word_offset = cursor
