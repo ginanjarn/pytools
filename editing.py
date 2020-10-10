@@ -10,7 +10,7 @@ from .langserver.client.sublimetext import completion, hover, formatting  # pyli
 
 logging.basicConfig(format='%(levelname)s: %(asctime)s  %(name)s: %(message)s')
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 
 
 def plugin_loaded():
