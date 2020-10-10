@@ -26,7 +26,7 @@ def format_code(source):
             return
         contents = source["contents"]
         if contents["language"] == "html":
-            if contents["value"] == None:
+            if contents["value"] == None or contents["value"] == "":
                 return None
             contents_value = "<div style=\"margin:.5em\">{}</div>".format(
                 contents["value"])
