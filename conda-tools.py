@@ -2,6 +2,7 @@ import sublime
 import sublime_plugin
 import subprocess
 import os
+import re
 
 
 class PytoolsEnvironmentSetupCommand(sublime_plugin.TextCommand):
@@ -24,13 +25,21 @@ class PytoolsEnvironmentSetupCommand(sublime_plugin.TextCommand):
     def conda_setup(self):
         HOME = "USERPROFILE" if os.name == "nt" else "HOME"
         HOME_path = os.environ[HOME]
-        anaconda_dir = ["anaconda2", "anaconda3", "miniconda2", "miniconda3"]
         list_homedir = os.listdir(HOME_path)
         anaconda_install_dir = None
-        for anaconda in anaconda_dir:
-            if anaconda in list_homedir:
+        def conda_dir(name):
+            conda = None
+            found = re.findall(r"\w+conda\w*",name)
+            if len(found) > 0:
+                conda = found[0]
+            return conda        
+
+        for name in list_homedir:
+            anaconda = conda_dir(name)
+            if anaconda:
                 anaconda_install_dir = os.path.join(HOME_path, anaconda)
                 break
+
         if not anaconda_install_dir:
             caption = "Anaconda install path"
             self.view.window().show_input_panel(caption, "", scan_conda_envs, None, None)
