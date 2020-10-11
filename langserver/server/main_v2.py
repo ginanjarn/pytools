@@ -309,4 +309,7 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except Exception:
+        logger.fatal("main error", exc_info=True)

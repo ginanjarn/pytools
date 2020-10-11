@@ -2,6 +2,7 @@ import sublime
 import sublime_plugin
 import subprocess
 import os
+import re
 
 
 class PytoolsEnvironmentSetupCommand(sublime_plugin.TextCommand):
@@ -24,13 +25,22 @@ class PytoolsEnvironmentSetupCommand(sublime_plugin.TextCommand):
     def conda_setup(self):
         HOME = "USERPROFILE" if os.name == "nt" else "HOME"
         HOME_path = os.environ[HOME]
-        anaconda_dir = ["anaconda2", "anaconda3", "miniconda2", "miniconda3"]
         list_homedir = os.listdir(HOME_path)
         anaconda_install_dir = None
-        for anaconda in anaconda_dir:
-            if anaconda in list_homedir:
+
+        def conda_dir(name):
+            conda = None
+            found = re.findall(r"\w+conda\w*", name)
+            if len(found) > 0:
+                conda = found[0]
+            return conda
+
+        for name in list_homedir:
+            anaconda = conda_dir(name)
+            if anaconda:
                 anaconda_install_dir = os.path.join(HOME_path, anaconda)
                 break
+
         if not anaconda_install_dir:
             caption = "Anaconda install path"
             self.view.window().show_input_panel(caption, "", scan_conda_envs, None, None)
@@ -43,7 +53,14 @@ class PytoolsEnvironmentSetupCommand(sublime_plugin.TextCommand):
             print("python not found")
             return
 
-        conda_l = []
+        s = sublime.load_settings("Pytools.sublime-settings")
+        env_settings = s.get("environment", {})
+        try:
+            env_list = env_settings["list"]
+        except Exception:
+            env_settings["list"] = []
+            env_list = env_settings["list"]
+
         prefix = path
         env_path = os.pathsep.join([prefix,
                                     os.path.join(prefix, "Library",
@@ -53,7 +70,11 @@ class PytoolsEnvironmentSetupCommand(sublime_plugin.TextCommand):
                                     os.path.join(prefix, "Library", "bin"),
                                     os.path.join(prefix, "Scripts"),
                                     os.path.join(path, "condabin")])
-        conda_l.append({"name": "base", "path": env_path, "manager": "conda"})
+
+        env_path_list = [env["path"] for env in env_list]
+        if env_path not in env_path_list:
+            env_list.append(
+                {"name": "base", "path": env_path, "manager": "conda"})
 
         envs = os.listdir(os.path.join(path, "envs"))
         if len(envs) > 0:
@@ -69,23 +90,10 @@ class PytoolsEnvironmentSetupCommand(sublime_plugin.TextCommand):
                                                 prefix, "Library", "bin"),
                                             os.path.join(prefix, "Scripts"),
                                             os.path.join(path, "condabin")])
-                conda_l.append(
-                    {"name": env, "path": env_path, "manager": "conda"})
-
-        s = sublime.load_settings("Pytools.sublime-settings")
-        environment_settings = s.get("environment")
-
-        if not environment_settings:
-            s.set("environment", {"list": conda_l})
-            sublime.save_settings("Pytools.sublime-settings")
-            return
-
-        env_list = environment_settings.get("list")
-        if not env_list:
-            environment_settings["list"] = conda_l
-        else:
-            environment_settings["list"].extend(conda_l)
-        s.set("environment", environment_settings)
+                if env_path not in env_path_list:
+                    env_list.append(
+                        {"name": env, "path": env_path, "manager": "conda"})
+        s.set("environment", env_settings)
         sublime.save_settings("Pytools.sublime-settings")
 
     def venv_setup(self):
@@ -97,26 +105,23 @@ class PytoolsEnvironmentSetupCommand(sublime_plugin.TextCommand):
         python = "python.exe" if os.name == "nt" else "python"
         if not os.isfile(os.path.join(path, bin_name, python)):
             return
+
         s = sublime.load_settings("Pytools.sublime-settings")
+        env_settings = s.get("environment", {})
+        try:
+            env_list = env_settings["list"]
+        except Exception:
+            env_settings["list"] = []
+            env_list = env_settings["list"]
+
         venvname = path.split(os.path.sep)[-1]
-
         env_path = os.pathsep.join([os.path.join(path, "Scripts")])
-        environment_settings = s.get("environment")
 
-        if not environment_settings:
-            venv = {
-                "list": [{"name": venvname, "path": env_path, "manager": "venv"}]}
-            s.set("environment", venv)
-            sublime.save_settings("Pytools.sublime-settings")
-            return
-        env_list = python_settings.get("list")
-        if not env_list:
-            environment_settings["list"] = [
-                {"name": venvname, "path": env_path, "manager": "venv"}]
-        else:
-            environment_settings["list"].append(
+        env_path_list = [env["path"] for env in env_list]
+        if env_path not in env_path_list:
+            env_list.append(
                 {"name": venvname, "path": env_path, "manager": "venv"})
-        s.set("environment", python_settings)
+        s.set("environment", env_settings)
         sublime.save_settings("Pytools.sublime-settings")
 
 

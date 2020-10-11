@@ -20,14 +20,7 @@ class PytoolsOpenterminalCommand(sublime_plugin.TextCommand):
         
         env_path = s.get("path")
         env_manager = s.get("manager")
-        env_active = s.get("active_environment")
-        if env_manager == "conda":
-            activate_cmd = ["activate",env_active]
-        elif env_manager == "venv":
-            activate_cmd = ["activate"]
-        else:
-            activate_cmd = []
-            logging.error("environment manager not found")
+        sys_env = None
 
         if os.name == "nt":
             terminal_cmd = ["C:\\Windows\\System32\\cmd.exe","/K"]
@@ -43,8 +36,19 @@ class PytoolsOpenterminalCommand(sublime_plugin.TextCommand):
             if not terminal_cmd:                
                 logging.error("terminal not found")
                 return
-
-        proccess_cmd = terminal_cmd+activate_cmd
+        
+        if env_manager:
+            env_active = s.get("active_environment")
+            if env_manager == "conda":
+                activate_cmd = ["activate",env_active]
+            elif env_manager == "venv":
+                activate_cmd = ["activate"]
+            else:
+                activate_cmd = []
+                logging.error("environment manager not found")    
+            proccess_cmd = terminal_cmd+activate_cmd
+        else:
+            proccess_cmd = terminal_cmd
 
         subprocess.Popen(proccess_cmd,env=get_sysenv(),cwd=work_dir)
 

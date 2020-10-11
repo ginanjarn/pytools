@@ -40,11 +40,12 @@ class Hover:
 
     def build_html_layout(self, data) -> str:
         try:
+            doc_body_l = []
+
             type_ = data.type
             name = data.name
             if type_ == "keyword":
                 return "<code>{} : {}</code>".format(type_, name)
-
             module_path = data.module_path if data.module_path else ""
             module_name = data.module_name
             definition = "{}:{}:{}".format(
@@ -52,24 +53,24 @@ class Hover:
             logger.debug(definition)
             doc = data.docstring(raw=True)
             logger.debug(doc)
-            doc = html.escape(doc, quote=False)
-
-            doc_body = doc.split("\n\n")
-            doc_body_l = []
-
             f_doc_head = "<code>%s : <a href=\"%s\">%s.%s</a></code>" % (
                 type_, definition, module_name, name)
             doc_body_l.append(f_doc_head)
-            doc_title = doc_body[0]
-            f_doc_title = "<h4>%s</h4>" % doc_title
-            doc_body_l.append(f_doc_title)
-            if len(doc_body) > 1:
-                doc_content = doc_body[1:]
-                for content in doc_content:
-                    content_line = content.split("\n")
-                    f_content = "<br>".join(content_line)
-                f_doc_content = "<p>%s</p>" % f_content
-                doc_body_l.append(f_doc_content)
+            
+            if doc != "":
+                doc = html.escape(doc, quote=False)
+                doc_body = doc.split("\n\n")
+                doc_title = doc_body[0]
+                f_doc_title = "<h4>%s</h4>" % doc_title
+                doc_body_l.append(f_doc_title)
+                if len(doc_body) > 1:
+                    doc_content = doc_body[1:]
+                    for content in doc_content:
+                        content_line = content.split("\n")
+                        f_content = "<br>".join(content_line)
+                    f_doc_content = "<p>%s</p>" % f_content
+                    doc_body_l.append(f_doc_content)
+            
             f_doc_body = "".join(doc_body_l)
             logger.debug(f_doc_body)
             return f_doc_body
