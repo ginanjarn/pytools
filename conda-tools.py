@@ -8,6 +8,8 @@ import re
 class PytoolsEnvironmentSetupCommand(sublime_plugin.TextCommand):
 
     def run(self, edit):
+        self.conda_setup()
+
         manager = ["conda", "venv"]
         self.view.window().show_quick_panel(manager, lambda i: self.select_envmanager(
             manager, i), flags=sublime.KEEP_OPEN_ON_FOCUS_LOST)
@@ -16,11 +18,17 @@ class PytoolsEnvironmentSetupCommand(sublime_plugin.TextCommand):
         if index == -1:
             return
         if env_manager[index] == "conda":
-            self.conda_setup()
+            anaconda_install_dir = self.conda_setup()
+            if not anaconda_install_dir:
+                caption = "Anaconda install path"
+                self.view.window().show_input_panel(caption, "", self.scan_conda_envs, None, None)
+                return
+            self.scan_conda_envs(anaconda_install_dir)
+
         elif env_manager[index] == "venv":
             self.venv_setup()
 
-        self.view.run_command("pytools_set_environment")
+        # self.view.run_command("pytools_set_environment")
 
     def conda_setup(self):
         HOME = "USERPROFILE" if os.name == "nt" else "HOME"
@@ -40,12 +48,8 @@ class PytoolsEnvironmentSetupCommand(sublime_plugin.TextCommand):
             if anaconda:
                 anaconda_install_dir = os.path.join(HOME_path, anaconda)
                 break
-
-        if not anaconda_install_dir:
-            caption = "Anaconda install path"
-            self.view.window().show_input_panel(caption, "", scan_conda_envs, None, None)
-            return
-        self.scan_conda_envs(anaconda_install_dir)
+        return anaconda_install_dir
+        
 
     def scan_conda_envs(self, path):
         python = "python.exe" if os.name == "nt" else "bin/python"
