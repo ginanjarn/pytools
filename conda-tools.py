@@ -107,7 +107,7 @@ class PytoolsEnvironmentSetupCommand(sublime_plugin.TextCommand):
     def scan_venv(self, path):
         bin_name = "Scripts" if os.name == "nt" else "bin"
         python = "python.exe" if os.name == "nt" else "python"
-        if not os.isfile(os.path.join(path, bin_name, python)):
+        if not os.path.isfile(os.path.join(path, bin_name, python)):
             return
 
         s = sublime.load_settings("Pytools.sublime-settings")
