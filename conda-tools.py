@@ -118,8 +118,13 @@ class PytoolsEnvironmentSetupCommand(sublime_plugin.TextCommand):
             env_settings["list"] = []
             env_list = env_settings["list"]
 
+        basepath = ""
+        base = [env for env in env_list if env["name"]=="base"]
+        if len(base) > 0:
+            basepath = base[0]["path"]
+
         venvname = path.split(os.path.sep)[-1]
-        env_path = os.pathsep.join([os.path.join(path, "Scripts")])
+        env_path = os.pathsep.join([os.path.join(path, "Scripts"), basepath])
 
         env_path_list = [env["path"] for env in env_list]
         if env_path not in env_path_list:
