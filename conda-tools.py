@@ -163,7 +163,7 @@ class PytoolsSetEnvironment(sublime_plugin.TextCommand):
         self.settings.set("python", "python")
         self.settings.set("path", env_path)
         self.settings.set("manager", env_manager)
-        self.settings.set("active_environment", env_name)
+        self.settings.set("active_environment", prefix)
         sublime.save_settings("Pytools.sublime-settings")
 
         self.view.run_command("pytools_resetserver")
