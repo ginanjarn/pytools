@@ -66,37 +66,41 @@ class PytoolsEnvironmentSetupCommand(sublime_plugin.TextCommand):
             env_list = env_settings["list"]
 
         prefix = path
-        env_path = os.pathsep.join([prefix,
-                                    os.path.join(prefix, "Library",
-                                                 "mingw-w64", "bin"),
-                                    os.path.join(
-                                        prefix, "Library", "usr", "bin"),
-                                    os.path.join(prefix, "Library", "bin"),
-                                    os.path.join(prefix, "Scripts"),
-                                    os.path.join(path, "condabin")])
+        s.set("condabin",os.path.join(path,"condabin"))
+        # env_path = os.pathsep.join([prefix,
+        #                             os.path.join(prefix, "Library",
+        #                                          "mingw-w64", "bin"),
+        #                             os.path.join(
+        #                                 prefix, "Library", "usr", "bin"),
+        #                             os.path.join(prefix, "Library", "bin"),
+        #                             os.path.join(prefix, "Scripts"),
+        #                             os.path.join(path, "condabin")])
 
-        env_path_list = [env["path"] for env in env_list]
-        if env_path not in env_path_list:
+        # env_path_list = [env["path"] for env in env_list]
+        env_path_list = [env["prefix"] for env in env_list]
+        if prefix not in env_path_list:
             env_list.append(
-                {"name": "base", "path": env_path, "manager": "conda"})
+                {"name": "base", "prefix": prefix, "manager": "conda"})
+                # {"name": "base", "path": env_path, "manager": "conda"})
 
         envs = os.listdir(os.path.join(path, "envs"))
         if len(envs) > 0:
             envs = [e for e in envs if not e.startswith(".")]
             for env in envs:
                 prefix = os.path.join(path, "envs", env)
-                env_path = os.pathsep.join([prefix,
-                                            os.path.join(
-                                                prefix, "Library", "mingw-w64", "bin"),
-                                            os.path.join(
-                                                prefix, "Library", "usr", "bin"),
-                                            os.path.join(
-                                                prefix, "Library", "bin"),
-                                            os.path.join(prefix, "Scripts"),
-                                            os.path.join(path, "condabin")])
-                if env_path not in env_path_list:
+                # env_path = os.pathsep.join([prefix,
+                #                             os.path.join(
+                #                                 prefix, "Library", "mingw-w64", "bin"),
+                #                             os.path.join(
+                #                                 prefix, "Library", "usr", "bin"),
+                #                             os.path.join(
+                #                                 prefix, "Library", "bin"),
+                #                             os.path.join(prefix, "Scripts"),
+                #                             os.path.join(path, "condabin")])
+                # if env_path not in env_path_list:
+                if prefix not in env_path_list:
                     env_list.append(
-                        {"name": env, "path": env_path, "manager": "conda"})
+                        {"name": env, "prefix": prefix, "manager": "conda"})
         s.set("environment", env_settings)
         sublime.save_settings("Pytools.sublime-settings")
 
@@ -126,10 +130,12 @@ class PytoolsEnvironmentSetupCommand(sublime_plugin.TextCommand):
         venvname = path.split(os.path.sep)[-1]
         env_path = os.pathsep.join([os.path.join(path, "Scripts"), basepath])
 
-        env_path_list = [env["path"] for env in env_list]
-        if env_path not in env_path_list:
+        # env_path_list = [env["path"] for env in env_list]
+        env_path_list = [env["prefix"] for env in env_list]
+        # if env_path not in env_path_list:
+        if prefix not in env_path_list:
             env_list.append(
-                {"name": venvname, "path": env_path, "manager": "venv"})
+                {"name": venvname, "prefix": prefix, "manager": "venv"})
         s.set("environment", env_settings)
         sublime.save_settings("Pytools.sublime-settings")
 
@@ -156,8 +162,22 @@ class PytoolsSetEnvironment(sublime_plugin.TextCommand):
             return
 
         env_name = self.env_list[index]["name"]
-        env_path = self.env_list[index]["path"]
+        prefix = self.env_list[index]["prefix"]
         env_manager = self.env_list[index]["manager"]
+        env_path = ""
+        if manager == "conda":
+            env_path = os.pathsep.join([prefix,
+                                        os.path.join(
+                                            prefix, "Library", "mingw-w64", "bin"),
+                                        os.path.join(
+                                            prefix, "Library", "usr", "bin"),
+                                        os.path.join(
+                                            prefix, "Library", "bin"),
+                                        os.path.join(prefix, "Scripts"),
+                                        os.path.join(path, "condabin")])
+        elif manager == "venv":
+            env_path = os.pathsep.join([os.path.join(path, "Scripts")])
+
         self.settings.set("python", "python")
         self.settings.set("path", env_path)
         self.settings.set("manager", env_manager)
