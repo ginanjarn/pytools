@@ -28,8 +28,6 @@ class PytoolsEnvironmentSetupCommand(sublime_plugin.TextCommand):
         elif env_manager[index] == "venv":
             self.venv_setup()
 
-        self.view.run_command("pytools_set_environment")
-
     def conda_setup(self):
         HOME = "USERPROFILE" if os.name == "nt" else "HOME"
         HOME_path = os.environ[HOME]
@@ -82,6 +80,9 @@ class PytoolsEnvironmentSetupCommand(sublime_plugin.TextCommand):
                         {"name": env, "prefix": prefix, "manager": "conda"})
         s.set("environment", env_settings)
         sublime.save_settings("Pytools.sublime-settings")
+        
+        self.view.run_command("pytools_set_environment")
+
 
     def venv_setup(self):
         caption = "Venv path"
@@ -110,6 +111,9 @@ class PytoolsEnvironmentSetupCommand(sublime_plugin.TextCommand):
                 {"name": venvname, "prefix": prefix, "manager": "venv"})
         s.set("environment", env_settings)
         sublime.save_settings("Pytools.sublime-settings")
+
+        self.view.run_command("pytools_set_environment")
+        
 
 
 class PytoolsSetEnvironment(sublime_plugin.TextCommand):
