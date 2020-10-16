@@ -4,6 +4,7 @@ import threading
 import os
 import subprocess
 import logging
+import re
 
 def get_sysenv():
     s = sublime.load_settings("Pytools.sublime-settings")
@@ -16,11 +17,7 @@ class PytoolsOpenterminalCommand(sublime_plugin.TextCommand):
     def run(self, edit):
         view = self.view
         s = sublime.load_settings("Pytools.sublime-settings")
-        work_dir = os.path.dirname(view.file_name())
-        
-        env_path = s.get("path")
-        env_manager = s.get("manager")
-        sys_env = None
+        work_dir = os.path.dirname(view.file_name())        
 
         if os.name == "nt":
             terminal_cmd = ["C:\\Windows\\System32\\cmd.exe","/K"]
@@ -37,12 +34,30 @@ class PytoolsOpenterminalCommand(sublime_plugin.TextCommand):
                 logging.error("terminal not found")
                 return
         
+        env_manager = s.get("manager")
         if env_manager:
+            conda_bin = s.get("condabin","")
+            conda_bin = os.path.join(conda_bin,"conda")
             env_active = s.get("active_environment")
             if env_manager == "conda":
-                activate_cmd = ["activate",env_active]
+                activate_cmd = [conda_bin,"activate",env_active]
             elif env_manager == "venv":
-                activate_cmd = ["activate"]
+                is_conda = False
+                home = ""
+                with open(os.path.join(env_active,"pyvenv.cfg"),"r") as file:
+                    data = file.read()
+                    homes = re.findall(r"home = (.*)",data)
+                    if len(homes) > 0:
+                        home = homes[0]
+                        conda = re.match(r".*conda.*",homes[0])
+                        if conda:
+                            is_conda = True
+                bin_name = "Scripts" if os.name == "nt" else "bin"
+                if is_conda:
+                    activate_cmd = [conda_bin,"activate",home,"&&",os.path.join(env_active,bin_name,"activate")]
+                else:
+                    activate_cmd = [os.path.join(env_active,bin_name,"activate")]
+
             else:
                 activate_cmd = []
                 logging.error("environment manager not found")    
