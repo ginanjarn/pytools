@@ -28,7 +28,7 @@ class PytoolsEnvironmentSetupCommand(sublime_plugin.TextCommand):
         elif env_manager[index] == "venv":
             self.venv_setup()
 
-        # self.view.run_command("pytools_set_environment")
+        self.view.run_command("pytools_set_environment")
 
     def conda_setup(self):
         HOME = "USERPROFILE" if os.name == "nt" else "HOME"
@@ -67,37 +67,16 @@ class PytoolsEnvironmentSetupCommand(sublime_plugin.TextCommand):
 
         prefix = path
         s.set("condabin",os.path.join(path,"condabin"))
-        # env_path = os.pathsep.join([prefix,
-        #                             os.path.join(prefix, "Library",
-        #                                          "mingw-w64", "bin"),
-        #                             os.path.join(
-        #                                 prefix, "Library", "usr", "bin"),
-        #                             os.path.join(prefix, "Library", "bin"),
-        #                             os.path.join(prefix, "Scripts"),
-        #                             os.path.join(path, "condabin")])
-
-        # env_path_list = [env["path"] for env in env_list]
         env_path_list = [env["prefix"] for env in env_list]
         if prefix not in env_path_list:
             env_list.append(
                 {"name": "base", "prefix": prefix, "manager": "conda"})
-                # {"name": "base", "path": env_path, "manager": "conda"})
 
         envs = os.listdir(os.path.join(path, "envs"))
         if len(envs) > 0:
             envs = [e for e in envs if not e.startswith(".")]
             for env in envs:
                 prefix = os.path.join(path, "envs", env)
-                # env_path = os.pathsep.join([prefix,
-                #                             os.path.join(
-                #                                 prefix, "Library", "mingw-w64", "bin"),
-                #                             os.path.join(
-                #                                 prefix, "Library", "usr", "bin"),
-                #                             os.path.join(
-                #                                 prefix, "Library", "bin"),
-                #                             os.path.join(prefix, "Scripts"),
-                #                             os.path.join(path, "condabin")])
-                # if env_path not in env_path_list:
                 if prefix not in env_path_list:
                     env_list.append(
                         {"name": env, "prefix": prefix, "manager": "conda"})
@@ -122,17 +101,10 @@ class PytoolsEnvironmentSetupCommand(sublime_plugin.TextCommand):
             env_settings["list"] = []
             env_list = env_settings["list"]
 
-        basepath = ""
-        base = [env for env in env_list if env["name"]=="base"]
-        if len(base) > 0:
-            basepath = base[0]["path"]
-
-        venvname = path.split(os.path.sep)[-1]
-        env_path = os.pathsep.join([os.path.join(path, "Scripts"), basepath])
-
-        # env_path_list = [env["path"] for env in env_list]
+        prefix = path
+        venvname = prefix.split(os.path.sep)[-2] if prefix.endswith(os.path.sep) else prefix.split(os.path.sep)[-1]
+        
         env_path_list = [env["prefix"] for env in env_list]
-        # if env_path not in env_path_list:
         if prefix not in env_path_list:
             env_list.append(
                 {"name": venvname, "prefix": prefix, "manager": "venv"})
@@ -175,7 +147,7 @@ class PytoolsSetEnvironment(sublime_plugin.TextCommand):
         prefix = self.env_list[index]["prefix"]
         env_manager = self.env_list[index]["manager"]
         env_path = ""
-        if manager == "conda":
+        if env_manager == "conda":
             env_path = os.pathsep.join([prefix,
                                         os.path.join(
                                             prefix, "Library", "mingw-w64", "bin"),
@@ -184,9 +156,9 @@ class PytoolsSetEnvironment(sublime_plugin.TextCommand):
                                         os.path.join(
                                             prefix, "Library", "bin"),
                                         os.path.join(prefix, "Scripts"),
-                                        os.path.join(path, "condabin")])
-        elif manager == "venv":
-            env_path = os.pathsep.join([os.path.join(path, "Scripts")])
+                                        os.path.join(prefix, "condabin")])
+        elif env_manager == "venv":
+            env_path = os.pathsep.join([os.path.join(prefix, "Scripts")])
 
         self.settings.set("python", "python")
         self.settings.set("path", env_path)
