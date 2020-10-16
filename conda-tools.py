@@ -152,10 +152,20 @@ class PytoolsSetEnvironment(sublime_plugin.TextCommand):
         if not self.env_list:
             sublime.error_message("No environment available")
             return
-        env_name_l = ["%s: %s" % (env["manager"], env["name"])
+
+        def formatname(name):
+            fix_len = 16
+            name_len = len(name)
+            if name_len > fix_len:
+                name = name[:fix_len]
+            else:
+                name += " "*(fix_len-name_len)
+            return name
+
+        env_name_l = ["%s : %s" % (formatname(env["name"]), env["prefix"])
                       for env in self.env_list]
         self.view.window().show_quick_panel(env_name_l,
-                                            lambda i: self.select_environment(i), flags=sublime.KEEP_OPEN_ON_FOCUS_LOST)
+                                            lambda i: self.select_environment(i), flags=sublime.KEEP_OPEN_ON_FOCUS_LOST|sublime.MONOSPACE_FONT)
 
     def select_environment(self, index):
         if index == -1:
