@@ -46,17 +46,20 @@ class Hover:
             name = data.name
             if type_ == "keyword":
                 return "<code>{} : {}</code>".format(type_, name)
-            module_path = data.module_path if data.module_path else ""
-            module_name = data.module_name
-            definition = "{}:{}:{}".format(
-                module_path, data.line, data.column + 1)
-            logger.debug(definition)
+            try:
+                module_path = data.module_path if data.module_path else ""
+                module_name = data.module_name
+                definition = "{}:{}:{}".format(
+                    module_path, data.line, data.column + 1)
+                logger.debug(definition)
+                f_doc_head = "<code>%s : <a href=\"%s\">%s.%s</a></code>" % (
+                    type_, definition, module_name, name)
+                doc_body_l.append(f_doc_head)
+            except Exception:
+                logger.warning("empty definition",exc_info=True)
+            
             doc = data.docstring(raw=True)
             logger.debug(doc)
-            f_doc_head = "<code>%s : <a href=\"%s\">%s.%s</a></code>" % (
-                type_, definition, module_name, name)
-            doc_body_l.append(f_doc_head)
-            
             if doc != "":
                 doc = html.escape(doc, quote=False)
                 doc_body = doc.split("\n\n")
