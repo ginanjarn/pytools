@@ -71,8 +71,8 @@ class Hover:
                     for content in doc_content:
                         content_line = content.split("\n")
                         f_content = "<br>".join(content_line)
-                    f_doc_content = "<p>%s</p>" % f_content
-                    doc_body_l.append(f_doc_content)
+                        f_doc_content = "<p>%s</p>" % f_content
+                        doc_body_l.append(f_doc_content)
             
             f_doc_body = "".join(doc_body_l)
             logger.debug(f_doc_body)
