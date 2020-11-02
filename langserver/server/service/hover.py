@@ -56,24 +56,41 @@ class Hover:
                     type_, definition, module_name, name)
                 doc_body_l.append(f_doc_head)
             except Exception:
-                logger.warning("empty definition",exc_info=True)
-            
-            doc = data.docstring(raw=True)
-            logger.debug(doc)
-            if doc != "":
-                doc = html.escape(doc, quote=False)
-                doc_body = doc.split("\n\n")
-                doc_title = doc_body[0]
-                f_doc_title = "<h4>%s</h4>" % doc_title
-                doc_body_l.append(f_doc_title)
-                if len(doc_body) > 1:
-                    doc_content = doc_body[1:]
-                    for content in doc_content:
-                        content_line = content.split("\n")
-                        f_content = "<br>".join(content_line)
-                        f_doc_content = "<p>%s</p>" % f_content
-                        doc_body_l.append(f_doc_content)
-            
+                logger.warning("empty definition", exc_info=True)
+
+            def join_section(doc_section, spacer=" "):
+                return spacer.join(doc_section.split("\n"))
+
+            if type_ in ["function", "class"]:
+                doc = data.docstring(raw=False)
+                logger.debug(doc)
+                if doc != "":
+                    doc_sect = doc.split("\n\n")
+                    if len(doc_sect) > 2:
+                        snippet = join_section(doc_sect[0], spacer=" ")
+                        doc_body_l.append("<p><code>%s</code></p>" % snippet)
+
+                        doc_title = doc_sect[1]
+                        doc_body_l.append("<h4>%s</h4>" % doc_title)
+
+                        for d in doc_sect[2:]:
+                            r = join_section(d, spacer="<br>")
+                            doc_body_l.append("<p>%s</p>" % r)
+                    else:
+                        doc_title = doc_sect[0]
+                        doc_body_l.append("<h4>%s</h4>" % doc_title)
+            else:
+                doc = data.docstring(raw=True)
+                logger.debug(doc)
+                if doc != "":
+                    doc_sect = doc.split("\n\n")
+                    doc_title = doc_sect[0]
+                    doc_body_l.append("<h4>%s</h4>" % doc_title)
+
+                    if len(doc_sect) > 1:
+                        for d in doc_sect[1:]:
+                            r = join_section(d, spacer="<br>")
+                            doc_body_l.append("<p>%s</p>" % r)
             f_doc_body = "".join(doc_body_l)
             logger.debug(f_doc_body)
             return f_doc_body
