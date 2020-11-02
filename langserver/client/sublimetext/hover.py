@@ -17,7 +17,7 @@ def goto_definition(view, path_encoded):
 def show_popup(view, content, location):
     if content:
         view.show_popup(content, sublime.HIDE_ON_MOUSE_MOVE_AWAY | sublime.COOPERATE_WITH_AUTO_COMPLETE, location=location,
-                        max_width=450, on_navigate=lambda path_encoded: goto_definition(view, path_encoded))
+                        max_width=500, on_navigate=lambda path_encoded: goto_definition(view, path_encoded))
 
 
 def format_code(source):
