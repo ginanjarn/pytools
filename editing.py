@@ -283,9 +283,3 @@ class PytoolsResetserverCommand(sublime_plugin.TextCommand):
         global clientHub
         clientHub.exit()
         logger.info("server terminated")
-
-    def is_visible(self):
-        view = self.view
-        if not view.match_selector(0, "source.python"):
-            return False
-        return True
