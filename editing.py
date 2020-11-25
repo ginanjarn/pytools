@@ -259,6 +259,8 @@ class Pytools(sublime_plugin.EventListener):
             return
         if view.match_selector(point, "source.python comment.line.number-sign.python"):
             return
+        if not str.isalpha(view.substr(view.word(point))):
+            return
 
         if hover_zone == sublime.HOVER_TEXT:
             if self.lsp_process_count >= 1:
