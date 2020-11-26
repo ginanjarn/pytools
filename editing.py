@@ -259,6 +259,8 @@ class Pytools(sublime_plugin.EventListener):
             return
         if view.match_selector(point, "source.python comment.line.number-sign.python"):
             return
+        if not str.isalpha(view.substr(view.word(point))):
+            return
 
         if hover_zone == sublime.HOVER_TEXT:
             if self.lsp_process_count >= 1:
@@ -281,9 +283,3 @@ class PytoolsResetserverCommand(sublime_plugin.TextCommand):
         global clientHub
         clientHub.exit()
         logger.info("server terminated")
-
-    def is_visible(self):
-        view = self.view
-        if not view.match_selector(0, "source.python"):
-            return False
-        return True

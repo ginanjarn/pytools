@@ -48,11 +48,12 @@ class Hover:
                 return "<code>{} : {}</code>".format(type_, name)
             try:
                 module_path = data.module_path if data.module_path else ""
-                module_name = data.module_name
                 definition = "{}:{}:{}".format(
                     module_path, data.line, data.column + 1)
                 logger.debug(definition)
-                f_doc_head = "<code>%s : <a href=\"%s\">%s.%s</a></code>" % (
+                module_name = data.module_name
+                module_name = module_name + "." if module_name != "__main__" else ""
+                f_doc_head = "<code>%s : <a href=\"%s\">%s%s</a></code>" % (
                     type_, definition, module_name, name)
                 doc_body_l.append(f_doc_head)
             except Exception:
