@@ -110,6 +110,7 @@ class Pytools(sublime_plugin.EventListener):
         self.lsp_client = None
         self.lsp_process_count = 0
         self._old_prefix = ""
+        self._old_location = 0
         self.cached_completion = {}
         # self.cached_completion_params = {}
 
@@ -176,6 +177,7 @@ class Pytools(sublime_plugin.EventListener):
                 completions, src[:word_offset])
             self.completions = completions
             self._old_prefix = prefix
+            self._old_location = cursor
             self.open_query_completions(view)
 
         # release lock
@@ -211,7 +213,9 @@ class Pytools(sublime_plugin.EventListener):
 
         if not view.match_selector(location, "source.python"):
             return
-        if view.match_selector(location, "meta.string.python"):
+        if view.match_selector(location, "meta.string"):
+            return
+        if view.match_selector(location, "comment"):
             return
 
         empty_completions = ([], sublime.INHIBIT_WORD_COMPLETIONS)
@@ -220,7 +224,7 @@ class Pytools(sublime_plugin.EventListener):
             completions = self.completions
             self.completions = None
 
-            if prefix.startswith(self._old_prefix) or self._old_prefix == "":
+            if prefix.startswith(self._old_prefix) or self._old_location == location:
                 return (completions, sublime.INHIBIT_WORD_COMPLETIONS)
             else:
                 return empty_completions
@@ -257,7 +261,9 @@ class Pytools(sublime_plugin.EventListener):
     def on_hover(self, view, point, hover_zone):
         if not view.match_selector(point, "source.python"):
             return
-        if view.match_selector(point, "source.python comment.line.number-sign.python"):
+        if view.match_selector(point, "meta.string"):
+            return
+        if view.match_selector(point, "comment"):
             return
         if not str.isalpha(view.substr(view.word(point))):
             return
