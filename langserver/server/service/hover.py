@@ -7,8 +7,12 @@ try:
 except ModuleNotFoundError:
     completion_error = "jedi"
 
-logging.basicConfig(format='%(levelname)s: %(asctime)s  %(name)s: %(message)s')
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("hover")
+# logger.setLevel(logging.DEBUG)
+sh = logging.StreamHandler()
+sh.setFormatter(logging.Formatter('%(levelname)s\t%(module)s: %(lineno)d\t%(message)s'))
+sh.setLevel(logging.DEBUG)
+logger.addHandler(sh)
 
 
 class Hover:

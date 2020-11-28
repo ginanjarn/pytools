@@ -1,8 +1,9 @@
 import sublime
 import logging
 
-logging.basicConfig(format='%(levelname)s: %(asctime)s  %(name)s: %(message)s')
+logging.basicConfig(format='%(levelname)s\t%(module)s: %(lineno)d\t%(message)s')
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 def update_edit(view, edit, new_values):

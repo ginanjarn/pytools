@@ -2,8 +2,9 @@ import sublime
 from os import path
 import logging
 
-logging.basicConfig(format='%(levelname)s: %(asctime)s  %(name)s: %(message)s')
+logging.basicConfig(format='%(levelname)s\t%(module)s: %(lineno)d\t%(message)s')
 logger = logging.getLogger(__name__)
+# logger.setLevel(logging.DEBUG)
 
 
 def goto_definition(view, path_encoded):
