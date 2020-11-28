@@ -8,7 +8,7 @@ except ModuleNotFoundError:
 
 
 logger = logging.getLogger("completion")
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 sh = logging.StreamHandler()
 sh.setFormatter(logging.Formatter('%(levelname)s\t%(module)s: %(lineno)d\t%(message)s'))
 sh.setLevel(logging.DEBUG)
