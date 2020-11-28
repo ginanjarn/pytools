@@ -280,7 +280,7 @@ class Pytools(sublime_plugin.EventListener):
             return
 
 
-class PytoolsResetserverCommand(sublime_plugin.TextCommand):
+class PytoolsShutdownserverCommand(sublime_plugin.TextCommand):
     def run(self, edit):
         thread = threading.Thread(target=self.exit_thread)
         thread.start()

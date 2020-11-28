@@ -4,7 +4,8 @@
 
 	{ "caption": "PyTools: Format Code", "command": "pytools_format" },
 	{ "caption": "PyTools: Lint Code", "command": "pytools_lint" },
-	{ "caption": "PyTools: Reset Server", "command": "pytools_resetserver" },
+	{ "caption": "PyTools: Shutdown Server", "command": "pytools_shutdownserver" },
 
+	{ "caption": "PyTools: Open Terminal", "command": "pytools_openterminal" },
 	{ "caption": "PyTools: Bug report", "command": "pytools_bugreport" },
 ]
