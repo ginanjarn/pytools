@@ -265,7 +265,7 @@ class Pytools(sublime_plugin.EventListener):
             return
         if view.match_selector(point, "comment"):
             return
-        if not str.isalpha(view.substr(view.word(point))):
+        if not str.isidentifier(view.substr(view.word(point))):
             return
 
         if hover_zone == sublime.HOVER_TEXT:
