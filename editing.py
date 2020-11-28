@@ -8,7 +8,7 @@ import logging
 from .langserver.client.service import Client  # pylint: disable=relative-beyond-top-level
 from .langserver.client.sublimetext import completion, hover, formatting  # pylint: disable=relative-beyond-top-level
 
-logging.basicConfig(format='%(levelname)s: %(asctime)s  %(name)s: %(message)s')
+logging.basicConfig(format='%(levelname)s\t%(module)s: %(lineno)d\t%(message)s')
 logger = logging.getLogger(__name__)
 # logger.setLevel(logging.DEBUG)
 
@@ -280,7 +280,7 @@ class Pytools(sublime_plugin.EventListener):
             return
 
 
-class PytoolsResetserverCommand(sublime_plugin.TextCommand):
+class PytoolsShutdownserverCommand(sublime_plugin.TextCommand):
     def run(self, edit):
         thread = threading.Thread(target=self.exit_thread)
         thread.start()
