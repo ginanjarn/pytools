@@ -8,7 +8,7 @@ import logging
 from .langserver.client.service import Client  # pylint: disable=relative-beyond-top-level
 from .langserver.client.sublimetext import completion, hover, formatting  # pylint: disable=relative-beyond-top-level
 
-logging.basicConfig(format='%(levelname)s: %(asctime)s  %(name)s: %(message)s')
+logging.basicConfig(format='%(levelname)s\t%(module)s: %(lineno)d\t%(message)s')
 logger = logging.getLogger(__name__)
 # logger.setLevel(logging.DEBUG)
 

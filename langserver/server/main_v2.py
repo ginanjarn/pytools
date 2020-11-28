@@ -5,9 +5,12 @@ import re
 from service import completion, hover, formatting  # pylint: disable=import-error
 import logging
 
-logging.basicConfig(format='%(levelname)s: %(asctime)s  %(name)s: %(message)s')
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger = logging.getLogger("main")
+# logger.setLevel(logging.DEBUG)
+sh = logging.StreamHandler()
+sh.setFormatter(logging.Formatter('%(levelname)s\t%(module)s: %(lineno)d\t%(message)s'))
+sh.setLevel(logging.DEBUG)
+logger.addHandler(sh)
 
 
 def pack(content: str) -> bytes:
