@@ -80,6 +80,18 @@ class RequestMessage(Message):
 			raise ValueError("required input <class 'dict'> found '%s'"%type(data))
 		self._message.update(msg_data)
 
+	@property
+	def id(self):
+		return self._message.get("id",None)
+
+	@property
+	def method(self):
+		return self._message.get("method",None)
+
+	@property
+	def method(self):
+		return self._message.get("params",None)
+
 
 class ResponseMessage(Message):
 	def __init__(self):
@@ -99,6 +111,18 @@ class ResponseMessage(Message):
 			raise ValueError("required input <class 'dict'> found '%s'"%type(data))
 		self._message.update(msg_data)
 
+	@property
+	def id(self):
+		return self._message.get("id",None)
+
+	@property
+	def results(self):
+		return self._message.get("results",None)
+
+	@property
+	def error(self):
+		return self._message.get("error",None)
+
 
 class ResponseError:
 	def __init__(self, code, message="", **kwargs):
@@ -114,4 +138,12 @@ class ResponseError:
 		if type(err_data) != dict:
 			raise ValueError("required input <class 'dict'> found '%s'"%type(data))
 		self._error.update(err_data)
+
+	@property
+	def code(self):
+		return self._error.get("code",None)
+
+	@property
+	def message(self):
+		return self.error.get("message","")
 
