@@ -96,11 +96,11 @@ class Server:
     def set_command(self, name, function):
         self.command[name] = function
 
-    def run_command(self, method, *args):
+    def run_command(self, method, params):
         results = None
         try:
-            logger.debug("run_command %s %s", method, *args)
-            results = self.command[method](*args)
+            logger.debug("run_command %s %s", method, params)
+            results = self.command[method](params)
         except KeyError:
             raise MethodNotFound
         finally:
@@ -144,14 +144,14 @@ class Server:
                 resp_msg.create(pid, results, err_msg.error)
                 return str(resp_msg)
 
-    def exit(self, *arg):
+    def exit(self, params=None):
         logger.info("exiting")
         self.wait_next = False
         return None
 
-    def ping(self, *args):
+    def ping(self, params=None):
         logger.info("ping test")
-        return args
+        return params
 
 
 def main():
