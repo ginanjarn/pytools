@@ -1,6 +1,10 @@
 """RPC encoder - decoder"""
 
 import re
+import json
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
 
 def encode(data: str) -> bytes:
 	separator = b"\r\n\r\n"
@@ -40,3 +44,74 @@ def decode(data: bytes) -> str:
 		raise ContentOverflow
 	else:
 		return body
+
+
+class Message:
+	def __init__(self):
+		self._message = {"jsonrpc":"2.0"}
+
+	def __str__(self):
+		return json.dumps(self._message)
+
+	def parse(self, src: str):
+		try:
+			self._message = json.loads(src)
+		except ValueError:
+			logging.error("unable to parse source",exc_info=True)
+		finally:
+			return self
+
+
+class RequestMessage(Message):
+	def __init__(self):
+		super().__init__()
+
+	def create(self, id,method,params=None,**kwargs):
+		self._message.update({"id":id,"method":method,"params":params})
+		self._message.update(kwargs)
+
+	@property
+	def message(self):
+		return self._message
+
+	@message.setter
+	def message(self,msg_data: dict):
+		if type(msg_data) != dict:
+			raise ValueError("required input <class 'dict'> found '%s'"%type(data))
+		self._message.update(msg_data)
+
+
+class ResponseMessage(Message):
+	def __init__(self):
+		super().__init__()
+
+	def create(self, id, results=None, error=None, **kwargs):
+		self._message.update({"id":id,"results":results,"error":error})
+		self._message.update(kwargs)
+
+	@property
+	def message(self):
+		return self._message
+
+	@message.setter
+	def message(self,msg_data: dict):
+		if type(msg_data) != dict:
+			raise ValueError("required input <class 'dict'> found '%s'"%type(data))
+		self._message.update(msg_data)
+
+
+class ResponseError:
+	def __init__(self, code, message="", **kwargs):
+		self._error = {"code":code,"message":message}
+		self._error.update(kwargs)
+
+	@property
+	def error(self):
+		return self._error
+
+	@error.setter
+	def error(self, err_data: dict):
+		if type(err_data) != dict:
+			raise ValueError("required input <class 'dict'> found '%s'"%type(data))
+		self._error.update(err_data)
+
