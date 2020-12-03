@@ -67,12 +67,7 @@ class Message:
         return json.dumps(self._message)
 
     def parse(self, src: str):
-        try:
-            self._message = json.loads(src)
-        except ValueError:
-            logger.error("unable to parse source", exc_info=True)
-        finally:
-            return self
+        self._message = json.loads(src)
 
 
 class RequestMessage(Message):
