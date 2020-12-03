@@ -89,7 +89,7 @@ class RequestMessage(Message):
 		return self._message.get("method",None)
 
 	@property
-	def method(self):
+	def params(self):
 		return self._message.get("params",None)
 
 
