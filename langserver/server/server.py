@@ -108,12 +108,14 @@ class Server:
 
     def parse_request(self, msg: str):
         logger.debug(msg)
-        rm = rpc.RequestMessage().parse(msg)
+        rm = rpc.RequestMessage()
+        rm.parse(msg)
         logger.debug(rm)
         return rm
 
     def process(self, data: str):
         logger.debug(data)
+        req_msg = None
         resp_msg = rpc.ResponseMessage()
 
         results = None
@@ -123,18 +125,24 @@ class Server:
         try:
             req_msg = self.parse_request(data)
             pid = req_msg.id
-            results = self.run_command(req_msg.method, req_msg.params)
         except json.JSONDecodeError:
             logger.exception("unable parse json", exc_info=True)
             err = rpc.ResponseError(PARSE_ERROR)
-            err_msg = err.error
-        except MethodNotFound:
-            err = rpc.ResponseError(METHOD_NOT_FOUND)
-            err_msg.message = err.error
-            logger.exception("method not found")
-        finally:
+            err_msg.error = err.error
+
             resp_msg.create(pid, results, err_msg.error)
             return str(resp_msg)
+
+        if req_msg is not None:
+            try:
+                results = self.run_command(req_msg.method, req_msg.params)
+            except MethodNotFound:
+                err = rpc.ResponseError(METHOD_NOT_FOUND)
+                err_msg.message = err.error
+                logger.exception("method not found")
+            finally:
+                resp_msg.create(pid, results, err_msg.error)
+                return str(resp_msg)
 
     def exit(self, *arg):
         logger.info("exiting")
