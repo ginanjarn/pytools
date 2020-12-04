@@ -1,6 +1,20 @@
 """Language-server param serializer"""
 
 
+class Workspace:
+	path = ""
+
+	@staticmethod
+	def serialize(path):
+		params = {"path":path}
+		return params
+
+	@classmethod
+	def deserialize(cls,params):
+		cls.path = params["path"]
+		return cls
+
+
 class Completion:
     src = None
     line = None

@@ -70,3 +70,11 @@ def complete(data=None):
     print(str(msg))
     result = request(str(msg))
     print(result)
+
+def set_workspace_config(path="this_path"):
+    msg = rpc.RequestMessage()
+    params = serializer.Workspace.serialize(path=path)
+    msg.create(40,"workspace/didChangeConfiguration",params)
+    print(str(msg))
+    result = request(str(msg))
+    print(result)

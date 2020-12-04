@@ -3,6 +3,7 @@ import rpc
 import logging
 import json
 import service.completion_v2 as cpv2
+import service.serializer as serializer
 
 
 logger = logging.getLogger("main")
@@ -56,6 +57,7 @@ class Server:
         self.wait_next = True
         self.command = {}
         self.capability = []
+        self.workspace: serializer.Workspace = None
 
     def listen(self, buffer_size=1024):
         HOST = "127.0.0.1"
@@ -193,7 +195,10 @@ class Server:
         try:
             logger.debug("line: %s\ncharacter: %s\nsrc +++++ \n%s",
                          csv.line, csv.character, csv.src)
-            result = csv.complete()
+            project = None
+            if self.workspace is not None:
+                project = csv.project(self.workspace.path)
+            result = csv.complete(project=project)
             logger.debug(result)
         except Exception:
             logger.exception("InternalError", exc_info=True)
@@ -205,6 +210,18 @@ class Server:
 
         return result
 
+    def change_workspace_config(self, params):
+        workspace = None
+        try:
+            workspace = serializer.Workspace.deserialize(params)
+        except Exception:
+            logger.exception("invalid_params",exc_info=True)
+        if workspace is None:
+            raise InvalidParams
+        self.workspace = workspace
+        logger.debug(self.workspace.path)
+
+
 
 def main():
     svr = Server()
@@ -214,6 +231,7 @@ def main():
 
     svr.set_command("initialize", svr.initialize)
     svr.set_command("textDocument/completion", svr.complete)
+    svr.set_command("workspace/didChangeConfiguration", svr.change_workspace_config)
 
     svr.loop()
 
