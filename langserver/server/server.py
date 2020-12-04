@@ -3,6 +3,7 @@ import rpc
 import logging
 import json
 import service.completion_v2 as cpv2
+import service.hover_v2 as hvv2
 import service.serializer as serializer
 
 
@@ -156,7 +157,7 @@ class Server:
                 err_msg.error = err.error
                 logger.debug(err_msg.error)
             finally:
-                resp_msg = rpc.RequestMessage().create(pid, results, err_msg.error)
+                resp_msg = rpc.ResponseMessage().create(pid, results, err_msg.error)
                 return str(resp_msg)
 
     def exit(self, params=None):
@@ -209,6 +210,40 @@ class Server:
 
         return result
 
+    def hover(self, params=None):
+        invalid_params = False
+        invalid_service = False
+        try:
+            hsv = hvv2.Hover(params)
+        except KeyError:
+            logger.exception("InvalidParams", exc_info=True)
+            invalid_params = True
+        except Exception:
+            logger.exception("InternalError", exc_info=True)
+            invalid_service = True
+
+        if invalid_params:
+            logger.error("invalid_params")
+            raise InvalidParams
+
+        try:
+            logger.debug("line: %s\ncharacter: %s\nsrc +++++ \n%s",
+                         hsv.line, hsv.character, hsv.src)
+            project = None
+            if self.workspace is not None:
+                project = hsv.project(self.workspace.path)
+            result = hsv.hover(project=project)
+            logger.debug(result)
+        except Exception:
+            logger.exception("InternalError", exc_info=True)
+            invalid_service = True
+
+        if invalid_service:
+            logger.error("invalid_service")
+            raise InternalError
+
+        return result
+
     def change_workspace_config(self, params):
         workspace = None
         try:
@@ -227,9 +262,11 @@ def main():
     svr.set_command("exit", svr.exit)
     svr.set_command("ping", svr.ping)
     svr.add_capability(cpv2.capability())
+    svr.add_capability(hvv2.capability())
 
     svr.set_command("initialize", svr.initialize)
     svr.set_command("textDocument/completion", svr.complete)
+    svr.set_command("textDocument/hover", svr.hover)
     svr.set_command("workspace/didChangeConfiguration", svr.change_workspace_config)
 
     svr.loop()
