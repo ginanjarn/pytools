@@ -1,5 +1,6 @@
 import socket
 import rpc
+import re
 import service.serializer as serializer
 
 HOST = "127.0.0.1"
@@ -63,6 +64,21 @@ def complete(data=None):
     chr_idx = len(strspl[-1])
     params = serializer.Completion.serialize(src, ln_idx, chr_idx)
     msg = rpc.RequestMessage().create(25, "textDocument/completion", params)
+    print(str(msg))
+    result = request(str(msg))
+    print(result)
+
+def hover(data=None):
+    if data is None:
+        data = "import os\nos.path"
+    src = data
+    strspl = data.split("\n")
+    ln_idx = len(strspl)
+    ln_idx -= 1  # langserver specification use zero-based index
+    last_word = re.findall(r"\w+",data)[-1]
+    chr_idx = len(strspl[-1])-len(last_word)
+    params = serializer.Completion.serialize(src, ln_idx, chr_idx)
+    msg = rpc.RequestMessage().create(25, "textDocument/hover", params)
     print(str(msg))
     result = request(str(msg))
     print(result)
