@@ -77,6 +77,15 @@ class TestRPC(unittest.TestCase):
             rqm.message = tc["input"]
             self.assertEqual(rqm.message, tc["want"])
 
+        tcase = [
+            {
+                "test": rpc.RequestMessage.create("12", "complete", None).message,
+                "want": {"jsonrpc": "2.0", "id": "12", "method": "complete", "params": None}
+            }
+        ]
+        for tc in tcase:            
+            self.assertEqual(tc["test"], tc["want"])
+
     def test_response_error(self):
         tcase = [
             {
@@ -95,7 +104,7 @@ class TestRPC(unittest.TestCase):
         rm = rpc.ResponseMessage()
         tcase = [
             {
-                "input": rm.create(24, None, rpc.ResponseError(3, "some wrong").error),
+                "test": rm.create(24, None, rpc.ResponseError(3, "some wrong").error).message,
                 "want": {'jsonrpc': '2.0', 'id': 24,
                          'results': None, 'error': {"code": 3, "message": "some wrong"}}
             }
@@ -103,8 +112,8 @@ class TestRPC(unittest.TestCase):
         for tc in tcase:
             # logging.debug(rm.message)
             # logging.debug(tc["want"])
-            result = rm.message
-            self.assertEqual(tc["want"], result)
+            # result = rm.message
+            self.assertEqual(tc["test"], tc["want"])
 
 
 if __name__ == '__main__':

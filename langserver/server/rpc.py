@@ -60,23 +60,18 @@ def decode(data: bytes) -> str:
 
 
 class Message:
-    def __init__(self):
+    def __init__(self,message=None):
         self._message = {"jsonrpc": "2.0"}
+        if message is not None:
+            self._message.update(message)
 
     def __str__(self):
         return json.dumps(self._message)
 
-    def parse(self, src: str):
-        self._message = json.loads(src)
-
-
-class RequestMessage(Message):
-    def __init__(self):
-        super().__init__()
-
-    def create(self, id, method, params=None, **kwargs):
-        self._message.update({"id": id, "method": method, "params": params})
-        self._message.update(kwargs)
+    @classmethod
+    def parse(cls, src: str):
+        message = json.loads(src)
+        return cls(message)
 
     @property
     def message(self):
@@ -86,8 +81,20 @@ class RequestMessage(Message):
     def message(self, msg_data: dict):
         if type(msg_data) != dict:
             raise ValueError(
-                "required input <class 'dict'> found '%s'" % type(data))
+                "required input %s found '%s'" % (type({}) ,type(data)))
         self._message.update(msg_data)
+
+
+class RequestMessage(Message):
+    def __init__(self,message=None):
+        super().__init__(message)
+
+    @classmethod
+    def create(cls, id, method, params=None, **kwargs):
+        message = {}
+        message.update({"id": id, "method": method, "params": params})
+        message.update(kwargs)
+        return cls(message)    
 
     @property
     def id(self):
@@ -103,23 +110,14 @@ class RequestMessage(Message):
 
 
 class ResponseMessage(Message):
-    def __init__(self):
-        super().__init__()
+    def __init__(self,message=None):
+        super().__init__(message)
 
-    def create(self, id, results=None, error=None, **kwargs):
-        self._message.update({"id": id, "results": results, "error": error})
-        self._message.update(kwargs)
-
-    @property
-    def message(self):
-        return self._message
-
-    @message.setter
-    def message(self, msg_data: dict):
-        if type(msg_data) != dict:
-            raise ValueError(
-                "required input <class 'dict'> found '%s'" % type(data))
-        self._message.update(msg_data)
+    @classmethod
+    def create(cls, id, results=None, error=None, **kwargs):
+        message = {"id": id, "results": results, "error": error}
+        message.update(kwargs)
+        return cls(message)    
 
     @property
     def id(self):
