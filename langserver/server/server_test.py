@@ -6,11 +6,23 @@ HOST = "127.0.0.1"
 PORT = 1205
 
 
-def send_message(data: bytes) -> bytes:
+def send_message(data: bytes, buffer_size=1024) -> bytes:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.connect((HOST, PORT))
         s.sendall(data)
-        data = s.recv(1024)
+        data = b""
+        while True:
+            recvdata = s.recv(buffer_size)
+            data += recvdata
+            try:
+                content = rpc.decode(data)
+                break
+            except rpc.ContentIncomplete:
+                continue
+            except rpc.ContentInvalid:
+                break
+            except rpc.ContentOverflow:
+                break
     return data
 
 
