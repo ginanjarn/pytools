@@ -2,6 +2,7 @@ import socket
 import rpc
 import logging
 import json
+import service.completion_v2 as cpv2
 
 
 logger = logging.getLogger("main")
@@ -54,6 +55,7 @@ class Server:
     def __init__(self):
         self.wait_next = True
         self.command = {}
+        self.capability = []
 
     def listen(self, buffer_size=1024):
         HOST = "127.0.0.1"
@@ -97,14 +99,20 @@ class Server:
         self.command[name] = function
 
     def run_command(self, method, params):
-        results = None
-        try:
-            logger.debug("run_command %s %s", method, params)
-            results = self.command[method](params)
-        except KeyError:
+        # results = None
+        # try:
+        #     logger.debug("run_command %s %s", method, params)
+        #     results = self.command[method](params)
+        #     return results
+        # except KeyError:
+        #     logger.exception("MethodNotFound",exc_info=True)
+        #     raise MethodNotFound
+
+        func = self.command.get(method, None)
+        if func is None:
             raise MethodNotFound
-        finally:
-            return results
+        results = func(params)
+        return results
 
     def parse_request(self, msg: str):
         logger.debug(msg)
@@ -137,9 +145,15 @@ class Server:
             try:
                 results = self.run_command(req_msg.method, req_msg.params)
             except MethodNotFound:
-                err = rpc.ResponseError(METHOD_NOT_FOUND)
-                err_msg.message = err.error
                 logger.exception("method not found")
+                err = rpc.ResponseError(METHOD_NOT_FOUND)
+                err_msg.error = err.error
+                logger.debug(err_msg.error)
+            except InternalError:
+                logger.exception("internal error")
+                err = rpc.ResponseError(INTERNAL_ERROR)
+                err_msg.error = err.error
+                logger.debug(err_msg.error)
             finally:
                 resp_msg.create(pid, results, err_msg.error)
                 return str(resp_msg)
@@ -153,11 +167,53 @@ class Server:
         logger.info("ping test")
         return params
 
+    def add_capability(self, capability):
+        self.capability.append(capability)
+
+    def initialize(self, params=None):
+        logger.info("initialize")
+        return self.capability
+
+    def complete(self, params=None):
+        invalid_params = False
+        invalid_service = False
+        try:
+            csv = cpv2.Completion(params)
+        except KeyError:
+            logger.exception("InvalidParams", exc_info=True)
+            invalid_params = True
+        except Exception:
+            logger.exception("InternalError", exc_info=True)
+            invalid_service = True
+
+        if invalid_params:
+            logger.error("invalid_params")
+            raise InvalidParams
+
+        try:
+            logger.debug("line: %s\ncharacter: %s\nsrc +++++ \n%s",
+                         csv.line, csv.character, csv.src)
+            result = csv.complete()
+            logger.debug(result)
+        except Exception:
+            logger.exception("InternalError", exc_info=True)
+            invalid_service = True
+
+        if invalid_service:
+            logger.error("invalid_service")
+            raise InternalError
+
+        return result
+
 
 def main():
     svr = Server()
     svr.set_command("exit", svr.exit)
     svr.set_command("ping", svr.ping)
+    svr.add_capability(cpv2.capability())
+
+    svr.set_command("initialize", svr.initialize)
+    svr.set_command("textDocument/completion", svr.complete)
 
     svr.loop()
 
