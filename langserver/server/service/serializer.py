@@ -2,23 +2,27 @@
 
 
 class Workspace:
-	path = ""
+    
+    def __init__(self, path):
+        self.path = path
 
-	@staticmethod
-	def serialize(path):
-		params = {"path":path}
-		return params
+    @staticmethod
+    def serialize(path):
+        params = {"path":path}
+        return params
 
-	@classmethod
-	def deserialize(cls,params):
-		cls.path = params["path"]
-		return cls
+    @classmethod
+    def deserialize(cls,params):
+        cls.path = params["path"]
+        return cls(path)
 
 
 class Completion:
-    src = None
-    line = None
-    character = None
+
+    def __init__(self, src, line, character):
+        self.src = src
+        self.line = line
+        self.character = character
 
     @staticmethod
     def serialize(src, line, character):
@@ -29,9 +33,9 @@ class Completion:
 
     @classmethod
     def deserialize(cls, params):
-        cls.src = params["textDocument"]["uri"]
-        cls.line = params["position"]["line"]
+        src = params["textDocument"]["uri"]
+        line = params["position"]["line"]
         # Jedi line position in a document (one-based).
-        cls.line += 1
-        cls.character = params["position"]["character"]
-        return cls
+        line += 1
+        character = params["position"]["character"]
+        return cls(src,line,character)
