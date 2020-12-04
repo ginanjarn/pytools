@@ -118,15 +118,14 @@ class Server:
 
     def parse_request(self, msg: str):
         logger.debug(msg)
-        rm = rpc.RequestMessage()
-        rm.parse(msg)
+        rm = rpc.RequestMessage().parse(msg)
         logger.debug(rm)
         return rm
 
     def process(self, data: str):
         logger.debug(data)
         req_msg = None
-        resp_msg = rpc.ResponseMessage()
+        resp_msg = None
 
         results = None
         err_msg = rpc.ResponseError(code=0)
@@ -140,7 +139,7 @@ class Server:
             err = rpc.ResponseError(PARSE_ERROR)
             err_msg.error = err.error
 
-            resp_msg.create(pid, results, err_msg.error)
+            resp_msg = rpc.ResponseMessage().create(pid, results, err_msg.error)
             return str(resp_msg)
 
         if req_msg is not None:
@@ -157,7 +156,7 @@ class Server:
                 err_msg.error = err.error
                 logger.debug(err_msg.error)
             finally:
-                resp_msg.create(pid, results, err_msg.error)
+                resp_msg = rpc.RequestMessage().create(pid, results, err_msg.error)
                 return str(resp_msg)
 
     def exit(self, params=None):
