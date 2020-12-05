@@ -133,9 +133,21 @@ class ResponseMessage(Message):
 
 
 class ResponseError:
-    def __init__(self, code, message="", **kwargs):
+    def __init__(self, code, message="", *args, **kwargs):
         self._error = {"code": code, "message": message}
+        if len(args)>0:
+            for arg in args:
+                self._error.update(arg)
         self._error.update(kwargs)
+
+    @classmethod
+    def parse(cls, params):
+        if type(params) != type({}):
+            raise ValueError
+
+        code = params.pop("code")
+        message = params.pop("message")
+        return cls(code, message, params)
 
     @property
     def error(self):

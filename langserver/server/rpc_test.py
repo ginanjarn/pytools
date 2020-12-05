@@ -100,6 +100,28 @@ class TestRPC(unittest.TestCase):
             tc["want"].update({"cocomsg": "coco"})
             self.assertEqual(tc["want"], result)
 
+        tcase = [
+            {
+                "test":{"code": "12", "message": "error message", "cocok": "test"},
+                "want":{"code": "12", "message": "error message", "cocok": "test"}
+            }
+        ]
+        for tc in tcase:
+            rsperr = rpc.ResponseError.parse(tc["test"])
+            result = {"code":rsperr.code,"message":rsperr.message,
+                    "cocok":rsperr.error["cocok"]}
+            logger.debug(tc["want"])
+            logger.debug(result)
+            self.assertEqual(tc["want"],result)
+
+        tcase = [
+            {
+                "test":[{"code": "12", "message": "error message", "cocok": "test"}]
+            }
+        ]
+        for tc in tcase:
+            self.assertRaises(ValueError, rpc.ResponseError.parse, tc["test"])
+
     def test_response_package(self):
         rm = rpc.ResponseMessage()
         tcase = [
