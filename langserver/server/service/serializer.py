@@ -63,3 +63,19 @@ class Hover:
         line += 1
         character = params["position"]["character"]
         return cls(src,line,character)
+
+
+class Formatting:
+
+    def __init__(self, src):
+        self.src = src
+
+    @staticmethod
+    def serialize(src):
+        params = {"textDocument": {"uri": src}}
+        return params
+
+    @classmethod
+    def deserialize(cls, params):
+        src = params["textDocument"]["uri"]
+        return cls(src)

@@ -89,3 +89,17 @@ def set_workspace_config(path="this_path"):
     print(str(msg))
     result = request(str(msg))
     print(result)
+
+def formatting(data=None):
+    src = """import os,time
+name=os.getcwd()
+
+
+import re
+ca = re.findall(r"[a-z]*","hello")"""
+    
+    params = serializer.Formatting.serialize(src)
+    msg = rpc.RequestMessage().create(25, "textDocument/formatting", params)
+    print(str(msg))
+    result = request(str(msg))
+    print(result)

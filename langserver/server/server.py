@@ -4,6 +4,7 @@ import logging
 import json
 import service.completion_v2 as cpv2
 import service.hover_v2 as hvv2
+import service.formatting_v2 as fmv2
 import service.serializer as serializer
 
 
@@ -255,6 +256,35 @@ class Server:
         self.workspace = workspace
         logger.debug(self.workspace.path)
 
+    def formatting(self, param):
+        invalid_params = False
+        invalid_service = False
+        try:
+            fsv = fmv2.Formatting(param)
+        except KeyError:
+            logger.exception("InvalidParams", exc_info=True)
+            invalid_params = True
+        except Exception:
+            logger.exception("InternalError", exc_info=True)
+            invalid_service = True
+
+        if invalid_params:
+            logger.error("invalid_params")
+            raise InvalidParams
+
+        try:
+            logger.debug("src +++++ \n%s", fsv.src)
+            result = fsv.format_code()
+            logger.debug(result)
+        except Exception:
+            logger.exception("InternalError", exc_info=True)
+            invalid_service = True
+
+        if invalid_service:
+            logger.error("invalid_service")
+            raise InternalError
+
+        return result
 
 
 def main():
@@ -263,11 +293,13 @@ def main():
     svr.set_command("ping", svr.ping)
     svr.add_capability(cpv2.capability())
     svr.add_capability(hvv2.capability())
+    svr.add_capability(fmv2.capability())
 
     svr.set_command("initialize", svr.initialize)
     svr.set_command("textDocument/completion", svr.complete)
     svr.set_command("textDocument/hover", svr.hover)
     svr.set_command("workspace/didChangeConfiguration", svr.change_workspace_config)
+    svr.set_command("textDocument/formatting", svr.formatting)
 
     svr.loop()
 
