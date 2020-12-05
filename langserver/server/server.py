@@ -55,7 +55,10 @@ class ServerErrorEnd(Exception):
 
 
 class Server:
-    def __init__(self):
+    def __init__(self, host=None, port=None):
+        self.host = host
+        self.port = port
+
         self.wait_next = True
         self.command = {}
         self.capability = []
@@ -63,7 +66,12 @@ class Server:
 
     def listen(self, buffer_size=1024):
         HOST = "127.0.0.1"
-        PORT = 1205
+        PORT = 9364
+
+        if self.host is not None:
+            HOST = self.host
+        if self.port is not None:
+            PORT = self.port
 
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.bind((HOST, PORT))
