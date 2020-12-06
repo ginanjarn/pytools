@@ -12,7 +12,7 @@ except ModuleNotFoundError:
 
 
 def capability():
-    return "completionProvider", {"resolveProvider": COMPLETION_CAPABLE}
+    return {"completionProvider": {"resolveProvider": COMPLETION_CAPABLE}}
 
 
 class Completion:

@@ -61,7 +61,7 @@ class Server:
 
         self.wait_next = True
         self.command = {}
-        self.capability = []
+        self.capability = {}
         self.workspace: serializer.Workspace = None
 
     def listen(self, buffer_size=1024):
@@ -179,7 +179,7 @@ class Server:
         return params
 
     def add_capability(self, capability):
-        self.capability.append(capability)
+        self.capability.update(capability)
 
     def initialize(self, params=None):
         logger.info("initialize")
@@ -296,7 +296,7 @@ class Server:
 
 
 def main():
-    svr = Server()
+    svr = Server(port=2048)
     svr.set_command("exit", svr.exit)
     svr.set_command("ping", svr.ping)
     svr.add_capability(cpv2.capability())

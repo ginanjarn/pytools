@@ -4,7 +4,7 @@ import re
 import service.serializer as serializer
 
 HOST = "127.0.0.1"
-PORT = 9364
+PORT = 2048
 
 
 def send_message(data: bytes, buffer_size=1024) -> bytes:
