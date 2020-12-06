@@ -64,29 +64,91 @@ class Client:
     
     @staticmethod
     def request(msg,host,port):
-        try:
-            logger.debug(msg)
-            emsg = rpc.encode(msg)
-            result = Client.send_message(emsg,host=host,port=port)
-            result = rpc.decode(result)
-            logger.debug(result)
-            return result
-        except (ConnectionError,ConnectionAbortedError,
-            ConnectionRefusedError,ConnectionResetError):
-            logger.exception("connection server error",exc_info=True)
-        except Exception:
-            logger.exception("internal error",exc_info=True)
+        logger.debug(msg)
+        emsg = rpc.encode(msg)
+        result = Client.send_message(emsg,host=host,port=port)
+        result = rpc.decode(result)
+        logger.debug(result)
+        return result        
 
+    @staticmethod
+    def run_server(python="python",script=None,env=None):
+        abspath = os.path.abspath(__name__)
+        langserver_path = abspath.split(os.sep)[:-2]
+        server_script = os.sep.join(langserver_path + ["server","server.py"])
+        if script is not None:
+            server_script = script
+
+        run_server_cmd = [python, server_script]
+        logger.debug(run_server_cmd)
+
+        server_proc = None
+        try:
+            if os.name == "nt":
+                # linux subprocess module does not have STARTUPINFO
+                # so only use it if on Windows
+                si = subprocess.STARTUPINFO()
+                si.dwFlags |= subprocess.SW_HIDE | subprocess.STARTF_USESHOWWINDOW
+                server_proc = subprocess.Popen(run_server_cmd, stdin=subprocess.PIPE,
+                                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True,
+                                               env=env, startupinfo=si)
+            else:
+                server_proc = subprocess.Popen(
+                    run_server_cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE, shell=True, env=env)
+        except Exception:
+            logger.exception("cannot run_server")
+
+        if server_proc is None:
+            raise ServerError
+
+        _, serr = server_proc.communicate()
+        if server_proc.returncode != 0:
+            logger.error("server error")
+            raise ServerError
 
     def __init__(self,host=None,port=None):
         self.host = host
         self.port = port
 
         self.capability = None
+        self.server_valid = None
 
 
     def _request(self,msg):
-        return Client.request(msg=msg,host=self.host,port=self.port)
+        try:
+            response = Client.request(msg=msg,host=self.host,port=self.port)
+            return response
+        except (ConnectionError,ConnectionAbortedError,
+            ConnectionRefusedError,ConnectionResetError):
+            logger.exception("connection server error",exc_info=True)
+            if self.server_valid == True:
+                self._start_server_thread()
+        except Exception:
+            logger.exception("internal error",exc_info=True)
+
+    def _server_thread(self):
+        try:
+            Client.run_server()
+        except Exception:
+            logger.exception("run_server_thread exception", exc_info=True)
+            self.server_valid = False
+
+    def _start_server_thread(self):
+        logger.info("running server")
+        thread = threading.Thread(target=self._server_thread)
+        thread.start()
+
+    def _run_server(self):
+        if self.server_valid is None:
+            self.server_valid = True
+        else:
+            logger.info("server already running")
+            return
+        if self.server_valid:
+            self._start_server_thread()
+        else:
+            logger.info("ServerError")
 
     def exit(self):
         msg = rpc.RequestMessage().create(12, "exit")
@@ -98,10 +160,12 @@ class Client:
             rerr = rpc.ResponseError.parse(rmsg.error)
             if rerr.code == 0:
                 self.capability = None
+                self.server_valid = None
         except Exception:
             logger.exception("exit exception",exc_info=True)    
     
     def initialize(self):
+        self._run_server()
         msg = rpc.RequestMessage().create(12, "initialize")
         logger.debug(str(msg))
         result = self._request(str(msg))
