@@ -72,7 +72,10 @@ class Client:
         return result        
 
     @staticmethod
-    def run_server(python="python",script=None,env=None):
+    def run_server(python=None,script=None,env=None):
+        python_runtime = "python"
+        if python is not None:
+            python_runtime = python
         abspath = os.path.abspath(__name__)
         langserver_path = abspath.split(os.sep)[:-2]
         server_script = os.sep.join(langserver_path + ["server","server.py"])
@@ -114,6 +117,10 @@ class Client:
         self.capability = None
         self.server_valid = None
 
+        self.python = None
+        self.server_script = None
+        self.env = None
+
 
     def _request(self,msg):
         try:
@@ -129,7 +136,8 @@ class Client:
 
     def _server_thread(self):
         try:
-            Client.run_server()
+            Client.run_server(python=self.python, script=self.server_script,
+                env=self.env)
         except Exception:
             logger.exception("run_server_thread exception", exc_info=True)
             self.server_valid = False
@@ -149,6 +157,16 @@ class Client:
             self._start_server_thread()
         else:
             logger.info("ServerError")
+
+    def _exit_services(self):
+        self.exit()
+        self.capability = None
+        self.server_valid = None
+
+    def set_python_runtime(self, python=None, env=None):
+        self.python = python
+        self.env = env
+        self._exit_services()
 
     def exit(self):
         msg = rpc.RequestMessage().create(12, "exit")
@@ -178,7 +196,14 @@ class Client:
         except Exception:
             logger.exception("initialize exception", exc_info=True)    
 
-    
+    def ready(self):
+        ready = True
+        if self.capability is None:
+            ready = False
+        if not self.server_valid:
+            ready = False
+        return ready
+
     def ping(self,data=None):
         msg = rpc.RequestMessage().create(12, "ping", data)
         logger.debug(str(msg))
