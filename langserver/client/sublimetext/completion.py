@@ -1,8 +1,11 @@
 import logging
 
-logging.basicConfig(format='%(levelname)s\t%(module)s: %(lineno)d\t%(message)s')
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
+sh = logging.StreamHandler()
+sh.setFormatter(logging.Formatter('%(levelname)s\t%(module)s: %(lineno)d\t%(message)s'))
+sh.setLevel(logging.DEBUG)
+logger.addHandler(sh)
 
 
 def format_code(data: list) -> any:
@@ -12,6 +15,6 @@ def format_code(data: list) -> any:
         parse = [("{}\t{}".format(cmpl["label"], cmpl["kind"]), cmpl["label"])
                  for cmpl in data]
         return parse
-    except Exception as e:
-        logger.error(e)
+    except Exception:
+        logger.exception("format_code",exc_info=True)
         return

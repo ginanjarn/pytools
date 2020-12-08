@@ -2,7 +2,7 @@ import logging
 
 
 logger = logging.getLogger("formatting")
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 sh = logging.StreamHandler()
 sh.setFormatter(logging.Formatter(
     '%(levelname)s\t%(module)s: %(lineno)d\t%(message)s'))

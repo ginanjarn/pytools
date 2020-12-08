@@ -5,7 +5,7 @@ import json
 import logging
 
 logger = logging.getLogger("main")
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 sh = logging.StreamHandler()
 sh.setFormatter(logging.Formatter(
     '%(levelname)s\t%(module)s: %(lineno)d\t%(message)s'))

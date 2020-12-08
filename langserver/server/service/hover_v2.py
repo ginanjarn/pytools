@@ -4,7 +4,7 @@ import logging
 
 
 logger = logging.getLogger("hover")
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 sh = logging.StreamHandler()
 sh.setFormatter(logging.Formatter(
     '%(levelname)s\t%(module)s: %(lineno)d\t%(message)s'))
@@ -55,13 +55,14 @@ class Hover:
         return ret
 
     def build_html_layout(self, data) -> str:
+        result = ""
         try:
             doc_body_l = []
 
             type_ = data.type
             name = data.name
             if type_ == "keyword":
-                return "<code>{} : {}</code>".format(type_, name)
+                result = "<code>{} : {}</code>".format(type_, name)
             try:
                 module_path = data.module_path if data.module_path else ""
                 definition = "{}:{}:{}".format(
@@ -110,7 +111,8 @@ class Hover:
                             doc_body_l.append("<p>%s</p>" % r)
             f_doc_body = "".join(doc_body_l)
             logger.debug(f_doc_body)
-            return f_doc_body
-        except Exception as e:
-            logger.error(e)
-            return ""
+            result = f_doc_body
+        except Exception:
+            logger.exception("build_html_layout", exc_info=True)
+        finally:
+            return result
