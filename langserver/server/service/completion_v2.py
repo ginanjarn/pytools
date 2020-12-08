@@ -1,4 +1,14 @@
 """Completion module"""
+import logging
+
+
+logger = logging.getLogger("formatting")
+logger.setLevel(logging.DEBUG)
+sh = logging.StreamHandler()
+sh.setFormatter(logging.Formatter(
+    '%(levelname)s\t%(module)s: %(lineno)d\t%(message)s'))
+sh.setLevel(logging.DEBUG)
+logger.addHandler(sh)
 
 
 COMPLETION_CAPABLE = True
@@ -42,4 +52,5 @@ class Completion:
             completion["label"] = r.name_with_symbols
             completion["kind"] = r.type
             completion_list.append(completion)
+        logger.debug(completion_list)
         return completion_list

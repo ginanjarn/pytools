@@ -8,7 +8,7 @@ from .langserver.client.service_v2 import Client  # pylint: disable=relative-bey
 from .langserver.client.sublimetext import completion, hover, formatting  # pylint: disable=relative-beyond-top-level
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 sh = logging.StreamHandler()
 sh.setFormatter(logging.Formatter('%(levelname)s\t%(module)s: %(lineno)d\t%(message)s'))
 sh.setLevel(logging.DEBUG)
