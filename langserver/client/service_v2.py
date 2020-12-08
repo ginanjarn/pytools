@@ -121,6 +121,7 @@ class Client:
         self.env = None
 
         self.cached_workspace = None
+        self.server_thread = None
 
 
     def _request(self,msg):
@@ -129,7 +130,7 @@ class Client:
             return response
         except (ConnectionError,ConnectionAbortedError,
             ConnectionRefusedError,ConnectionResetError):
-            logger.exception("connection server error",exc_info=True)
+            logger.exception("connection server error",exc_info=False)
             if self.server_valid == True:
                 self._start_server_thread()
         except Exception:
@@ -144,8 +145,16 @@ class Client:
 
     def _start_server_thread(self):
         logger.info("running server")
-        thread = threading.Thread(target=self._server_thread)
-        thread.start()
+        def make_thread():
+            thread = threading.Thread(target=self._server_thread)
+            return thread
+        if self.server_thread is None:
+            self.server_thread = make_thread()
+            self.server_thread.start()
+        else:
+            if not self.server_thread.is_alive():
+                self.server_thread = make_thread()
+                self.server_thread.start()
 
     def _run_server(self):
         if self.server_valid is None:
@@ -200,7 +209,7 @@ class Client:
             logger.debug(results)
             self.capability = results
         except Exception:
-            logger.exception("initialize exception", exc_info=True)    
+            logger.exception("initialize exception", exc_info=False)    
 
     def ready(self):
         ready = True

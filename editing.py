@@ -14,6 +14,7 @@ sh.setFormatter(logging.Formatter('%(levelname)s\t%(module)s: %(lineno)d\t%(mess
 sh.setLevel(logging.DEBUG)
 logger.addHandler(sh)
 
+
 class ThreadRunning(Exception):
     pass
 
@@ -82,8 +83,7 @@ class ClientHub(Client):
             return
 
         env["PATH"] = os.pathsep + env['PATH']
-        CLIENT_HUB.set_python_runtime(python=python,env=env)
-
+        self.set_python_runtime(python=python, env=env)
 
 
 CLIENT_HUB = ClientHub()
@@ -133,13 +133,15 @@ class Pytools(sublime_plugin.EventListener):
         self.completion_thread = None
         self.hover_thread = None
 
+        s = sublime.load_settings("Pytools.sublime-settings")
+        s.add_on_change("path", self.load_service)
+
     def load_service(self):
         try:
             CLIENT_HUB.load_runtime()
             self.service_loaded = True
         except:
             pass
-
 
     def valid_scope(self, view, location):
         if not view.match_selector(location, "source.python"):
@@ -218,7 +220,12 @@ class Pytools(sublime_plugin.EventListener):
             if self.valid_scope(view, location):
                 self._current_prefix = prefix
                 self._current_pos = location
+
+                def make_completion(cmpl):
+                    return (cmpl, sublime.INHIBIT_WORD_COMPLETIONS | sublime.INHIBIT_EXPLICIT_COMPLETIONS)
+
                 completions = None
+
                 if self.completions is not None:
                     completions = self.completions
                     self.completions = None
@@ -236,7 +243,10 @@ class Pytools(sublime_plugin.EventListener):
                             self.completion_thread = make_thread()
                     self.completion_thread.start()
 
-                return completions
+                if completions is None:
+                    completions = []
+                return make_completion(completions)
+                
         except InvalidSelector:
             logger.debug("InvalidSelector")
         except ThreadRunning:
@@ -261,7 +271,6 @@ class Pytools(sublime_plugin.EventListener):
             if not self.service_loaded:
                 self.load_service()
             CLIENT_HUB.initialize()
-
 
     def on_hover(self, view, point, hover_zone):
         try:

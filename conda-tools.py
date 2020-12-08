@@ -170,4 +170,4 @@ class PytoolsSetEnvironment(sublime_plugin.TextCommand):
         self.settings.set("active_environment", prefix)
         sublime.save_settings("Pytools.sublime-settings")
 
-        self.view.run_command("pytools_resetserver")
+        self.view.run_command("pytools_shutdownserver")
