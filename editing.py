@@ -73,13 +73,13 @@ class ClientHub(Client):
         python = load_settings("python")
         env = get_sysenv()
 
-        # if python == None and env == None:
-        #     logger.warning("python environment not configured")
-        #     msg = "Python environment not configured.\nSetup now?"
-        #     setup = sublime.ok_cancel_dialog(msg, "Yes")
-        #     if setup:
-        #         view.run_command("pytools_environment_setup")
-        #     return
+        if python == None and env == None:
+            logger.warning("python environment not configured")
+            msg = "Python environment not configured.\nSetup now?"
+            setup = sublime.ok_cancel_dialog(msg, "Yes")
+            if setup:
+                view.run_command("pytools_environment_setup")
+            return
 
         env["PATH"] = os.pathsep + env['PATH']
         CLIENT_HUB.set_python_runtime(python=python,env=env)
