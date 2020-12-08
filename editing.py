@@ -4,6 +4,7 @@ import difflib
 import subprocess
 import threading
 import os
+from queue import Queue
 import logging
 from .langserver.client.service_v2 import Client  # pylint: disable=relative-beyond-top-level
 from .langserver.client.sublimetext import completion, hover, formatting  # pylint: disable=relative-beyond-top-level
@@ -63,33 +64,35 @@ def get_sysenv():
 class ClientHub(Client):
     def __init__(self):
         super().__init__()
-        self._lock = False
+        self.q_lock = Queue()
 
     def runnable(self, func):
         def wrap(*args, **kwargs):
-            if self._lock:
+            if self.q_lock.qsize()>0:
                 raise ProcessLocked
-            self._lock = True
+            self.q_lock.put("lock")
             result = func(*args, **kwargs)
-            self._lock = False
-            return result
+            self.q_lock.get()
         return wrap
 
     def load_runtime(self):
         python = load_settings("python")
         env = get_sysenv()
 
-        if python == None and env == None:
-            logger.warning("python environment not configured")
-            msg = "Python environment not configured.\nSetup now?"
-            setup = sublime.ok_cancel_dialog(msg, "Yes")
-            if setup:
-                view.run_command("pytools_environment_setup")
-            return
+        # if python == None and env == None:
+        #     logger.warning("python environment not configured")
+        #     msg = "Python environment not configured.\nSetup now?"
+        #     setup = sublime.ok_cancel_dialog(msg, "Yes")
+        #     if setup:
+        #         view.run_command("pytools_environment_setup")
+        #     return
 
         env["PATH"] = os.pathsep + env['PATH']
         CLIENT_HUB.set_python_runtime(python=python,env=env)
 
+    def release_lock(self):
+        for loop in range(self.q_lock.qsize()):
+            self.q_lock.get()
 
 
 CLIENT_HUB = ClientHub()
@@ -127,6 +130,10 @@ class Pytools(sublime_plugin.EventListener):
 
     def __init__(self):
         self.service_loaded = None
+        self.completions = None
+
+        self._current_prefix = ""
+        self._current_pos = 0
 
     def load_service(self):
         try:
@@ -136,11 +143,10 @@ class Pytools(sublime_plugin.EventListener):
             pass
 
 
-    def valid_scope(view, location):
+    def valid_scope(self, view, location):
         if not view.match_selector(location, "source.python"):
             raise InvalidSelector
-        if view.match_selector(location, "comment")
-                or view.match_selector(location, "meta.string"):
+        if view.match_selector(location, "comment") or view.match_selector(location, "meta.string"):
             raise InvalidSelector
         return True
 
@@ -157,10 +163,15 @@ class Pytools(sublime_plugin.EventListener):
             word_offset = cursor
 
         row, col = view.rowcol(word_offset)
-        if CLIENT_HUB.ready:
+        if CLIENT_HUB.ready():
+            CLIENT_HUB.set_workspace_config(path=view.file_name())
             results = CLIENT_HUB.complete(src,row,col)
+            logger.debug(results)
             completions = completion.format_code(results)
             self.completions = completions
+
+            if self.show_completion(cursor, prefix):
+                self.open_query_completions(view)
         else:
             if not self.service_loaded:
                 self.load_service()
@@ -175,6 +186,15 @@ class Pytools(sublime_plugin.EventListener):
             "next_completion_if_showing": False,
             "auto_complete_commit_on_tab": True,
         })
+
+    def show_completion(self, pos, prefix):
+        show = False
+        logger.debug("_current_pos = %s, pos = %s",self._current_pos,pos)
+        logger.debug("_current_prefix = %s, prefix = %s",self._current_prefix,prefix)
+        if self._current_pos == pos or self._current_prefix.startswith(prefix):
+            show = True
+        logger.debug("show_completion : %s",show)
+        return show
 
     def on_query_completions(self, view, prefix, locations):
         """Sublime autocomplete event handler.
@@ -194,7 +214,9 @@ class Pytools(sublime_plugin.EventListener):
         location = locations[0]
 
         try:
-            if self.valid_scope(location):
+            if self.valid_scope(view, location):
+                self._current_prefix = prefix
+                self._current_pos = location
                 completions = None
                 if self.completions is not None:
                     completions = self.completions
@@ -208,6 +230,7 @@ class Pytools(sublime_plugin.EventListener):
             logger.debug("ProcessLocked")
         except InvalidSelector:
             logger.debug("InvalidSelector")
+            CLIENT_HUB.release_lock()
         except Exception:
             logger.exception("completion exception")
 
@@ -217,16 +240,15 @@ class Pytools(sublime_plugin.EventListener):
         if not str.isidentifier(view.substr(word_region)):
             raise InvalidWord
 
-        if point == word_region.b:
-            self.lsp_process_count -= 1
-            view.erase_status("lsp_process")
-            return
         src = view.substr(sublime.Region(0, word_region.b))
         row, col = view.rowcol(point)
 
         if CLIENT_HUB.ready():
+            CLIENT_HUB.set_workspace_config(path=view.file_name())
             result = CLIENT_HUB.hover(src,row,col)
-            hover.show_popup(view=view, content=result, location=point)
+            logger.debug(result)
+            formatted_result = hover.format_code(result)
+            hover.show_popup(view=view, content=formatted_result, location=point)
         else:
             if not self.service_loaded:
                 self.load_service()
@@ -235,7 +257,7 @@ class Pytools(sublime_plugin.EventListener):
 
     def on_hover(self, view, point, hover_zone):
         try:
-            if self.valid_scope(point):
+            if self.valid_scope(view, point):
                 if hover_zone == sublime.HOVER_TEXT:
                     thread = threading.Thread(target=self.fetch_help,
                         args=(view, point))
@@ -243,8 +265,10 @@ class Pytools(sublime_plugin.EventListener):
         except ProcessLocked:
             logger.debug("ProcessLocked")
         except InvalidSelector:
+            CLIENT_HUB.release_lock()
             logger.debug("InvalidSelector")
         except InvalidWord:
+            CLIENT_HUB.release_lock()
             logger.debug("InvalidWord")
         except Exception:
             logger.exception("hover exception", exc_info=True)
@@ -255,9 +279,19 @@ class PytoolsShutdownserverCommand(sublime_plugin.TextCommand):
         thread = threading.Thread(target=self.exit_thread)
         thread.start()
 
+    def valid_scope(self, location):
+        view = self.view
+        if not view.match_selector(location, "source.python"):
+            raise InvalidSelector
+        return True
+
     def exit_thread(self):
-        try:        
-            CLIENT_HUB.exit()
-            logger.info("server terminated")
+        try:
+            if self.valid_scope(0):        
+                CLIENT_HUB.exit()
+                logger.info("server terminated")
+        except InvalidSelector:
+            CLIENT_HUB.release_lock()
+            logger.debug("InvalidSelector")
         except Exception:
             logger.exception("exit exception", exc_info=True)

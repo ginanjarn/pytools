@@ -6,8 +6,7 @@ import subprocess
 import threading
 import random
 import logging
-import rpc
-import serializer
+from . import rpc, serializer
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -76,13 +75,14 @@ class Client:
         python_runtime = "python"
         if python is not None:
             python_runtime = python
-        abspath = os.path.abspath(__name__)
+        abspath = os.path.abspath(__file__)
+        logger.debug(abspath)
         langserver_path = abspath.split(os.sep)[:-2]
         server_script = os.sep.join(langserver_path + ["server","server.py"])
         if script is not None:
             server_script = script
 
-        run_server_cmd = [python, server_script]
+        run_server_cmd = [python_runtime, server_script]
         logger.debug(run_server_cmd)
 
         server_proc = None
@@ -107,7 +107,7 @@ class Client:
 
         _, serr = server_proc.communicate()
         if server_proc.returncode != 0:
-            logger.error("server error")
+            logger.error("server error\n%s",serr.decode())
             raise ServerError
 
     def __init__(self,host=None,port=None):
@@ -120,6 +120,8 @@ class Client:
         self.python = None
         self.server_script = None
         self.env = None
+
+        self.cached_workspace = None
 
 
     def _request(self,msg):
@@ -136,8 +138,7 @@ class Client:
 
     def _server_thread(self):
         try:
-            Client.run_server(python=self.python, script=self.server_script,
-                env=self.env)
+            Client.run_server(python=self.python, script=self.server_script, env=self.env)
         except Exception:
             logger.exception("run_server_thread exception", exc_info=True)
             self.server_valid = False
@@ -153,23 +154,29 @@ class Client:
         else:
             logger.info("server already running")
             return
-        if self.server_valid:
-            self._start_server_thread()
-        else:
-            logger.info("ServerError")
+        # if self.server_valid:
+        #     self._start_server_thread()
+        # else:
+        #     logger.info("ServerError")
 
     def _exit_services(self):
         self.exit()
         self.capability = None
         self.server_valid = None
 
+    @property
+    def _req_id(self):
+        return random.random()
+
     def set_python_runtime(self, python=None, env=None):
         self.python = python
         self.env = env
-        self._exit_services()
+        logger.debug("python = %s, env = %s",self.python,
+            self.env)
+        # self._exit_services()
 
     def exit(self):
-        msg = rpc.RequestMessage().create(12, "exit")
+        msg = rpc.RequestMessage().create(self._req_id, "exit")
         logger.debug(str(msg))
         result = self._request(str(msg))
         logger.debug(result)
@@ -184,7 +191,7 @@ class Client:
     
     def initialize(self):
         self._run_server()
-        msg = rpc.RequestMessage().create(12, "initialize")
+        msg = rpc.RequestMessage().create(self._req_id, "initialize")
         logger.debug(str(msg))
         result = self._request(str(msg))
         logger.debug(result)
@@ -205,7 +212,7 @@ class Client:
         return ready
 
     def ping(self,data=None):
-        msg = rpc.RequestMessage().create(12, "ping", data)
+        msg = rpc.RequestMessage().create(self._req_id, "ping", data)
         logger.debug(str(msg))
         result = self._request(str(msg))
         logger.debug(result)
@@ -221,7 +228,7 @@ class Client:
                 raise ServiceUnavailable
         
             params = serializer.Completion.serialize(source,line,character)
-            msg = rpc.RequestMessage().create(25, "textDocument/completion", params)
+            msg = rpc.RequestMessage().create(self._req_id, "textDocument/completion", params)
             logger.debug(str(msg))
             result = self._request(str(msg))
             logger.debug(result)
@@ -240,7 +247,7 @@ class Client:
                 raise ServiceUnavailable
 
             params = serializer.Hover.serialize(source,line,character)
-            msg = rpc.RequestMessage().create(25, "textDocument/hover", params)
+            msg = rpc.RequestMessage().create(self._req_id, "textDocument/hover", params)
             logger.debug(str(msg))
             result = self._request(str(msg))
             logger.debug(result)
@@ -251,11 +258,16 @@ class Client:
             logger.exception("hover exception",exc_info=True)
     
     def set_workspace_config(self, path=""):
-        params = serializer.Workspace.serialize(path=path)
-        msg = rpc.RequestMessage().create(40,"workspace/didChangeConfiguration",params)
-        logger.debug(str(msg))
-        result = self._request(str(msg))
-        logger.debug(result)
+        workspace = serializer.Workspace.serialize(path=path)
+        if self.cached_workspace != workspace:
+            self.cached_workspace = workspace
+    
+            params = self.cached_workspace
+    
+            msg = rpc.RequestMessage().create(self._req_id,"workspace/didChangeConfiguration",params)
+            logger.debug(str(msg))
+            result = self._request(str(msg))
+            logger.debug(result)
     
     def formatting(self, source):
         if self.capability is None:
@@ -266,7 +278,7 @@ class Client:
             if not capable:
                 raise ServiceUnavailable
             params = serializer.Formatting.serialize(source)
-            msg = rpc.RequestMessage().create(25, "textDocument/formatting", params)
+            msg = rpc.RequestMessage().create(self._req_id, "textDocument/formatting", params)
             logger.debug(str(msg))
             result = self._request(str(msg))
             logger.debug(result)
