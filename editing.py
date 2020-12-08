@@ -1,10 +1,8 @@
 import sublime  # pylint: disable=import-error
 import sublime_plugin  # pylint: disable=import-error
-import difflib
 import subprocess
 import threading
 import os
-from queue import Queue
 import logging
 from .langserver.client.service_v2 import Client  # pylint: disable=relative-beyond-top-level
 from .langserver.client.sublimetext import completion, hover, formatting  # pylint: disable=relative-beyond-top-level
@@ -100,17 +98,18 @@ class PytoolsFormatCommand(sublime_plugin.TextCommand):
             return
         
         if CLIENT_HUB.ready():
-            self.formatting(edit)
+            self.do_formatting(edit)
         else:
             CLIENT_HUB.load_runtime()
             CLIENT_HUB.runnable(CLIENT_HUB.initialize())
 
     @CLIENT_HUB.runnable
-    def formatting(self, edit):
+    def do_formatting(self, edit):
         view = self.view
         src = view.substr(sublime.Region(0, view.size()))
         try:
             result = CLIENT_HUB.formatting(src)
+            logger.debug(result)
             formatting.update_edit(view, edit, result)
         except Exception:
             logger.debug("formatting exception", exc_info=True)
@@ -300,20 +299,12 @@ class PytoolsShutdownserverCommand(sublime_plugin.TextCommand):
         thread = threading.Thread(target=self.exit_thread)
         thread.start()
 
-    def valid_scope(self, location):
-        view = self.view
-        if not view.match_selector(location, "source.python"):
-            raise InvalidSelector
-        return True
-
     @CLIENT_HUB.runnable
     def exit_thread(self):
-        try:
-            if self.valid_scope(0):        
-                CLIENT_HUB.exit()
-                logger.info("server terminated")
+        try:            
+            CLIENT_HUB.exit()
+            logger.info("server terminated")
         except InvalidSelector:
-            # CLIENT_HUB.release_lock()
             logger.debug("InvalidSelector")
         except Exception:
             logger.exception("exit exception", exc_info=True)
