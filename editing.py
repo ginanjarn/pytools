@@ -16,8 +16,7 @@ sh.setFormatter(logging.Formatter('%(levelname)s\t%(module)s: %(lineno)d\t%(mess
 sh.setLevel(logging.DEBUG)
 logger.addHandler(sh)
 
-
-class ProcessLocked(Exception):
+class ThreadRunning(Exception):
     pass
 
 class InvalidSelector(Exception):
@@ -64,16 +63,13 @@ def get_sysenv():
 class ClientHub(Client):
     def __init__(self):
         super().__init__()
-        self.q_lock = Queue()
+        self.lock = threading.Lock()
 
     def runnable(self, func):
-        def wrap(*args, **kwargs):
-            if self.q_lock.qsize()>0:
-                raise ProcessLocked
-            self.q_lock.put("lock")
-            result = func(*args, **kwargs)
-            self.q_lock.get()
-        return wrap
+        with self.lock:
+            def wrapper(*args, **kwargs):
+                return func(*args, **kwargs)
+            return wrapper
 
     def load_runtime(self):
         python = load_settings("python")
@@ -90,9 +86,6 @@ class ClientHub(Client):
         env["PATH"] = os.pathsep + env['PATH']
         CLIENT_HUB.set_python_runtime(python=python,env=env)
 
-    def release_lock(self):
-        for loop in range(self.q_lock.qsize()):
-            self.q_lock.get()
 
 
 CLIENT_HUB = ClientHub()
@@ -110,14 +103,17 @@ class PytoolsFormatCommand(sublime_plugin.TextCommand):
             self.formatting(edit)
         else:
             CLIENT_HUB.load_runtime()
-            CLIENT_HUB.initialize()
+            CLIENT_HUB.runnable(CLIENT_HUB.initialize())
 
     @CLIENT_HUB.runnable
     def formatting(self, edit):
         view = self.view
         src = view.substr(sublime.Region(0, view.size()))
-        result = clientHub.formatting(src)
-        formatting.update_edit(view, edit, result)
+        try:
+            result = CLIENT_HUB.formatting(src)
+            formatting.update_edit(view, edit, result)
+        except Exception:
+            logger.debug("formatting exception", exc_info=True)
 
     def is_visible(self):
         view = self.view
@@ -134,6 +130,9 @@ class Pytools(sublime_plugin.EventListener):
 
         self._current_prefix = ""
         self._current_pos = 0
+
+        self.completion_thread = None
+        self.hover_thread = None
 
     def load_service(self):
         try:
@@ -225,23 +224,30 @@ class Pytools(sublime_plugin.EventListener):
                     completions = self.completions
                     self.completions = None
                 else:
-                    thread = threading.Thread(target=self.fetch_completions,
-                        args=(view,prefix,locations))
-                    thread.start()
+                    def make_thread():
+                        thread = threading.Thread(target=self.fetch_completions,
+                            args=(view,prefix,locations))
+                        return thread
+                    if self.completion_thread is None:
+                        self.completion_thread = make_thread()                        
+                    else:
+                        if self.completion_thread.is_alive():
+                            raise ThreadRunning
+                        else:
+                            self.completion_thread = make_thread()
+                    self.completion_thread.start()
+
                 return completions
-        except ProcessLocked:
-            logger.debug("ProcessLocked")
         except InvalidSelector:
             logger.debug("InvalidSelector")
-            CLIENT_HUB.release_lock()
+        except ThreadRunning:
+            logging.debug("ThreadRunning")
         except Exception:
             logger.exception("completion exception")
 
     @CLIENT_HUB.runnable
-    def fetch_help(self, view, point):
+    def fetch_help(self, view, point):    
         word_region = view.word(point)
-        if not str.isidentifier(view.substr(word_region)):
-            raise InvalidWord
 
         src = view.substr(sublime.Region(0, word_region.b))
         row, col = view.rowcol(point)
@@ -262,17 +268,29 @@ class Pytools(sublime_plugin.EventListener):
         try:
             if self.valid_scope(view, point):
                 if hover_zone == sublime.HOVER_TEXT:
-                    thread = threading.Thread(target=self.fetch_help,
-                        args=(view, point))
-                    thread.start()
-        except ProcessLocked:
-            logger.debug("ProcessLocked")
+                    word_region = view.word(point)
+                    if not str.isidentifier(view.substr(word_region)):
+                        raise InvalidWord
+
+                    def make_thread():
+                        thread = threading.Thread(target=self.fetch_help,
+                            args=(view, point))
+                        return thread
+                    if self.hover_thread is None:
+                        self.hover_thread = make_thread()
+                    else:
+                        if self.hover_thread.is_alive():
+                            raise ThreadRunning
+                        else:
+                            self.hover_thread = make_thread()
+                    self.hover_thread.start()
+
         except InvalidSelector:
-            CLIENT_HUB.release_lock()
             logger.debug("InvalidSelector")
         except InvalidWord:
-            CLIENT_HUB.release_lock()
             logger.debug("InvalidWord")
+        except ThreadRunning:
+            logger.debug("ThreadRunning")
         except Exception:
             logger.exception("hover exception", exc_info=True)
 
@@ -288,13 +306,14 @@ class PytoolsShutdownserverCommand(sublime_plugin.TextCommand):
             raise InvalidSelector
         return True
 
+    @CLIENT_HUB.runnable
     def exit_thread(self):
         try:
             if self.valid_scope(0):        
                 CLIENT_HUB.exit()
                 logger.info("server terminated")
         except InvalidSelector:
-            CLIENT_HUB.release_lock()
+            # CLIENT_HUB.release_lock()
             logger.debug("InvalidSelector")
         except Exception:
             logger.exception("exit exception", exc_info=True)
