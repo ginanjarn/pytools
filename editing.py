@@ -164,11 +164,12 @@ class Pytools(sublime_plugin.EventListener):
 
         row, col = view.rowcol(word_offset)
         if CLIENT_HUB.ready():
-            CLIENT_HUB.set_workspace_config(path=view.file_name())
+            CLIENT_HUB.set_workspace_config(path=os.path.dirname(view.file_name()))
             results = CLIENT_HUB.complete(src,row,col)
             logger.debug(results)
             completions = completion.format_code(results)
             self.completions = completions
+            logger.debug(self.completions)
 
             if self.show_completion(cursor, prefix):
                 self.open_query_completions(view)
@@ -193,6 +194,8 @@ class Pytools(sublime_plugin.EventListener):
         logger.debug("_current_prefix = %s, prefix = %s",self._current_prefix,prefix)
         if self._current_pos == pos or self._current_prefix.startswith(prefix):
             show = True
+        if self.completions is None:
+            show = False
         logger.debug("show_completion : %s",show)
         return show
 
@@ -244,7 +247,7 @@ class Pytools(sublime_plugin.EventListener):
         row, col = view.rowcol(point)
 
         if CLIENT_HUB.ready():
-            CLIENT_HUB.set_workspace_config(path=view.file_name())
+            CLIENT_HUB.set_workspace_config(path=os.path.dirname(view.file_name()))
             result = CLIENT_HUB.hover(src,row,col)
             logger.debug(result)
             formatted_result = hover.format_code(result)

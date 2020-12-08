@@ -16,7 +16,7 @@ class Workspace:
 
     @classmethod
     def deserialize(cls,params):
-        cls.path = params["path"]
+        path = params["path"]
         return cls(path)
 
 
