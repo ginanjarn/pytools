@@ -33,6 +33,9 @@ def plugin_loaded():
     settings.set("auto_complete_triggers", triggers)
     sublime.save_settings("Preferences.sublime-settings")
 
+    s = sublime.load_settings("Pytools.sublime-settings")
+    s.add_on_change("path", CLIENT_HUB.load_runtime)
+
 
 def load_settings(key):
     s = sublime.load_settings("Pytools.sublime-settings")
@@ -133,13 +136,11 @@ class Pytools(sublime_plugin.EventListener):
         self.completion_thread = None
         self.hover_thread = None
 
-        s = sublime.load_settings("Pytools.sublime-settings")
-        s.add_on_change("path", self.load_service)
-
     def load_service(self):
         try:
             CLIENT_HUB.load_runtime()
             self.service_loaded = True
+            logger.debug("load_service")
         except:
             pass
 
