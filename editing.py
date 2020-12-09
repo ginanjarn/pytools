@@ -217,13 +217,15 @@ class Pytools(sublime_plugin.EventListener):
         """
         location = locations[0]
 
+        def make_completion(cmpl):
+            return (cmpl, sublime.INHIBIT_WORD_COMPLETIONS | sublime.INHIBIT_EXPLICIT_COMPLETIONS)
+
+        results = make_completion([])
+
         try:
             if self.valid_scope(view, location):
                 self._current_prefix = prefix
                 self._current_pos = location
-
-                def make_completion(cmpl):
-                    return (cmpl, sublime.INHIBIT_WORD_COMPLETIONS | sublime.INHIBIT_EXPLICIT_COMPLETIONS)
 
                 completions = None
 
@@ -244,16 +246,18 @@ class Pytools(sublime_plugin.EventListener):
                             self.completion_thread = make_thread()
                     self.completion_thread.start()
 
-                if completions is None:
-                    completions = []
-                return make_completion(completions)
+                completions = [] if completions is None else completions
+                results = make_completion(completions)
                 
         except InvalidSelector:
             logger.debug("InvalidSelector")
+            results = None
         except ThreadRunning:
             logging.debug("ThreadRunning")
         except Exception:
             logger.exception("completion exception")
+
+        return results
 
     @CLIENT_HUB.runnable
     def fetch_help(self, view, point):    
