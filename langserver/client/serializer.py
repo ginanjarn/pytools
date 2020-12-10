@@ -4,19 +4,27 @@ THIS MODULE IS COPY OF server.service.serializer MODULE
 """
 
 
+class DeserializeError(Exception):
+    """Unable to deserialize content"""
+    pass
+
+
 class Workspace:
-    
+
     def __init__(self, path):
         self.path = path
 
     @staticmethod
     def serialize(path):
-        params = {"path":path}
+        params = {"path": path}
         return params
 
     @classmethod
-    def deserialize(cls,params):
-        path = params["path"]
+    def deserialize(cls, params):
+        try:
+            path = params["path"]
+        except Exception:
+            raise DeserializeError
         return cls(path)
 
 
@@ -36,12 +44,15 @@ class Completion:
 
     @classmethod
     def deserialize(cls, params):
-        src = params["textDocument"]["uri"]
-        line = params["position"]["line"]
-        # Jedi line position in a document (one-based).
-        line += 1
-        character = params["position"]["character"]
-        return cls(src,line,character)
+        try:
+            src = params["textDocument"]["uri"]
+            line = params["position"]["line"]
+            # Jedi line position in a document (one-based).
+            line += 1
+            character = params["position"]["character"]
+        except Exception:
+            raise DeserializeError
+        return cls(src, line, character)
 
 
 class Hover:
@@ -60,12 +71,15 @@ class Hover:
 
     @classmethod
     def deserialize(cls, params):
-        src = params["textDocument"]["uri"]
-        line = params["position"]["line"]
-        # Jedi line position in a document (one-based).
-        line += 1
-        character = params["position"]["character"]
-        return cls(src,line,character)
+        try:
+            src = params["textDocument"]["uri"]
+            line = params["position"]["line"]
+            # Jedi line position in a document (one-based).
+            line += 1
+            character = params["position"]["character"]
+        except Exception:
+            raise DeserializeError
+        return cls(src, line, character)
 
 
 class Formatting:
@@ -80,5 +94,8 @@ class Formatting:
 
     @classmethod
     def deserialize(cls, params):
-        src = params["textDocument"]["uri"]
+        try:
+            src = params["textDocument"]["uri"]
+        except Exception:
+            raise DeserializeError
         return cls(src)
