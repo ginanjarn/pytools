@@ -26,12 +26,20 @@ def capability():
     return {"hoverProvider": HOVER_CAPABLE}
 
 
+class HoverError(Exception):
+    """Hover Error"""
+    pass
+
+
 class Hover:
     def __init__(self, params):
-        cparam = serializer.Hover.deserialize(params)
-        self.src = cparam.src
-        self.line = cparam.line
-        self.character = cparam.character
+        try:
+            cparam = serializer.Hover.deserialize(params)
+            self.src = cparam.src
+            self.line = cparam.line
+            self.character = cparam.character
+        except serializer.DeserializeError:
+            raise serializer.DeserializeError
 
     def project(self,path):
         p = Project(path=path)
@@ -45,13 +53,17 @@ class Hover:
         if character is not None:
             self.character = character
 
-        c = Script(source=self.src, project=project)
-        result = c.help(self.line, self.character)
-
-        if len(result) <= 0:
-            return None
-        prebuit_doc = self.build_html_layout(result[0])
-        ret = {"contents": {"language": "html", "value": prebuit_doc}}
+        try:
+            c = Script(source=self.src, project=project)
+            result = c.help(self.line, self.character)
+    
+            if len(result) <= 0:
+                return None
+            prebuit_doc = self.build_html_layout(result[0])
+            ret = {"contents": {"language": "html", "value": prebuit_doc}}
+        except Exception:
+            raise HoverError
+            
         return ret
 
     def build_html_layout(self, data) -> str:

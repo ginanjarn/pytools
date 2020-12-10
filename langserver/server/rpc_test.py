@@ -120,7 +120,7 @@ class TestRPC(unittest.TestCase):
             }
         ]
         for tc in tcase:
-            self.assertRaises(ValueError, rpc.ResponseError.parse, tc["test"])
+            self.assertRaises(rpc.ParseError, rpc.ResponseError.parse, tc["test"])
 
     def test_response_package(self):
         rm = rpc.ResponseMessage()

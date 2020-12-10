@@ -1,6 +1,11 @@
 """Language-server param serializer"""
 
 
+class DeserializeError(Exception):
+    """Unable to deserialize content"""
+    pass
+
+
 class Workspace:
     
     def __init__(self, path):
@@ -13,7 +18,10 @@ class Workspace:
 
     @classmethod
     def deserialize(cls,params):
-        path = params["path"]
+        try:
+            path = params["path"]
+        except Exception:
+            raise DeserializeError
         return cls(path)
 
 
@@ -33,11 +41,14 @@ class Completion:
 
     @classmethod
     def deserialize(cls, params):
-        src = params["textDocument"]["uri"]
-        line = params["position"]["line"]
-        # Jedi line position in a document (one-based).
-        line += 1
-        character = params["position"]["character"]
+        try:
+            src = params["textDocument"]["uri"]
+            line = params["position"]["line"]
+            # Jedi line position in a document (one-based).
+            line += 1
+            character = params["position"]["character"]
+        except Exception:
+            raise DeserializeError
         return cls(src,line,character)
 
 
@@ -57,11 +68,14 @@ class Hover:
 
     @classmethod
     def deserialize(cls, params):
-        src = params["textDocument"]["uri"]
-        line = params["position"]["line"]
-        # Jedi line position in a document (one-based).
-        line += 1
-        character = params["position"]["character"]
+        try:
+            src = params["textDocument"]["uri"]
+            line = params["position"]["line"]
+            # Jedi line position in a document (one-based).
+            line += 1
+            character = params["position"]["character"]
+        except Exception:
+            raise DeserializeError
         return cls(src,line,character)
 
 
@@ -77,5 +91,8 @@ class Formatting:
 
     @classmethod
     def deserialize(cls, params):
-        src = params["textDocument"]["uri"]
+        try:
+            src = params["textDocument"]["uri"]
+        except Exception:
+            raise DeserializeError
         return cls(src)

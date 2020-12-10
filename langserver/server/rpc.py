@@ -59,6 +59,11 @@ def decode(data: bytes) -> str:
         return body
 
 
+class ParseError(Exception):
+    """Unable to parse"""
+    pass
+
+
 class Message:
     def __init__(self,message=None):
         self._message = {"jsonrpc": "2.0"}
@@ -70,7 +75,11 @@ class Message:
 
     @classmethod
     def parse(cls, src: str):
-        message = json.loads(src)
+        try:
+            message = json.loads(src)
+        except Exception:
+            logger.exception("error parse message")
+            raise ParseError
         return cls(message)
 
     @property
@@ -79,7 +88,7 @@ class Message:
 
     @message.setter
     def message(self, msg_data: dict):
-        if type(msg_data) != dict:
+        if not isinstance(msg_data, dict):
             raise ValueError(
                 "required input %s found '%s'" % (type({}) ,type(data)))
         self._message.update(msg_data)
@@ -142,8 +151,8 @@ class ResponseError:
 
     @classmethod
     def parse(cls, params):
-        if type(params) != type({}):
-            raise ValueError
+        if not isinstance(params, dict):
+            raise ParseError
 
         code = params.pop("code")
         message = params.pop("message")
@@ -155,7 +164,7 @@ class ResponseError:
 
     @error.setter
     def error(self, err_data: dict):
-        if type(err_data) != dict:
+        if not isinstance(err_data, dict):
             raise ValueError(
                 "required input <class 'dict'> found '%s'" % type(data))
         self._error.update(err_data)
