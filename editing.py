@@ -8,11 +8,12 @@ from .langserver.client.service_v2 import Client  # pylint: disable=relative-bey
 from .langserver.client.sublimetext import completion, hover, formatting  # pylint: disable=relative-beyond-top-level
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 sh = logging.StreamHandler()
 sh.setFormatter(logging.Formatter('%(levelname)s\t%(module)s: %(lineno)d\t%(message)s'))
 sh.setLevel(logging.DEBUG)
 logger.addHandler(sh)
+
 
 class ThreadRunning(Exception):
     pass
@@ -31,6 +32,9 @@ def plugin_loaded():
     ]
     settings.set("auto_complete_triggers", triggers)
     sublime.save_settings("Preferences.sublime-settings")
+
+    s = sublime.load_settings("Pytools.sublime-settings")
+    s.add_on_change("path", CLIENT_HUB.load_runtime)
 
 
 def load_settings(key):
@@ -82,8 +86,7 @@ class ClientHub(Client):
             return
 
         env["PATH"] = os.pathsep + env['PATH']
-        CLIENT_HUB.set_python_runtime(python=python,env=env)
-
+        self.set_python_runtime(python=python, env=env)
 
 
 CLIENT_HUB = ClientHub()
@@ -137,9 +140,9 @@ class Pytools(sublime_plugin.EventListener):
         try:
             CLIENT_HUB.load_runtime()
             self.service_loaded = True
+            logger.debug("load_service")
         except:
             pass
-
 
     def valid_scope(self, view, location):
         if not view.match_selector(location, "source.python"):
@@ -214,11 +217,18 @@ class Pytools(sublime_plugin.EventListener):
         """
         location = locations[0]
 
+        def make_completion(cmpl):
+            return (cmpl, sublime.INHIBIT_WORD_COMPLETIONS | sublime.INHIBIT_EXPLICIT_COMPLETIONS)
+
+        results = make_completion([])
+
         try:
             if self.valid_scope(view, location):
                 self._current_prefix = prefix
                 self._current_pos = location
+
                 completions = None
+
                 if self.completions is not None:
                     completions = self.completions
                     self.completions = None
@@ -236,13 +246,18 @@ class Pytools(sublime_plugin.EventListener):
                             self.completion_thread = make_thread()
                     self.completion_thread.start()
 
-                return completions
+                completions = [] if completions is None else completions
+                results = make_completion(completions)
+                
         except InvalidSelector:
             logger.debug("InvalidSelector")
+            results = None
         except ThreadRunning:
             logging.debug("ThreadRunning")
         except Exception:
             logger.exception("completion exception")
+
+        return results
 
     @CLIENT_HUB.runnable
     def fetch_help(self, view, point):    
@@ -261,7 +276,6 @@ class Pytools(sublime_plugin.EventListener):
             if not self.service_loaded:
                 self.load_service()
             CLIENT_HUB.initialize()
-
 
     def on_hover(self, view, point, hover_zone):
         try:

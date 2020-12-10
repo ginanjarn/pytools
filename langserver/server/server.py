@@ -9,7 +9,7 @@ import service.serializer as serializer
 
 
 logger = logging.getLogger("main")
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 sh = logging.StreamHandler()
 sh.setFormatter(logging.Formatter(
     '%(levelname)s\t%(module)s: %(lineno)d\t%(message)s'))
@@ -66,7 +66,7 @@ class Server:
 
     def listen(self, buffer_size=1024):
         HOST = "127.0.0.1"
-        PORT = 9364
+        PORT = 2048
 
         if self.host is not None:
             HOST = self.host
