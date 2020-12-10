@@ -7,17 +7,17 @@ class DeserializeError(Exception):
 
 
 class Workspace:
-    
+
     def __init__(self, path):
         self.path = path
 
     @staticmethod
     def serialize(path):
-        params = {"path":path}
+        params = {"path": path}
         return params
 
     @classmethod
-    def deserialize(cls,params):
+    def deserialize(cls, params):
         try:
             path = params["path"]
         except Exception:
@@ -49,7 +49,7 @@ class Completion:
             character = params["position"]["character"]
         except Exception:
             raise DeserializeError
-        return cls(src,line,character)
+        return cls(src, line, character)
 
 
 class Hover:
@@ -76,7 +76,7 @@ class Hover:
             character = params["position"]["character"]
         except Exception:
             raise DeserializeError
-        return cls(src,line,character)
+        return cls(src, line, character)
 
 
 class Formatting:

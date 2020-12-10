@@ -65,7 +65,7 @@ class ParseError(Exception):
 
 
 class Message:
-    def __init__(self,message=None):
+    def __init__(self, message=None):
         self._message = {"jsonrpc": "2.0"}
         if message is not None:
             self._message.update(message)
@@ -90,12 +90,12 @@ class Message:
     def message(self, msg_data: dict):
         if not isinstance(msg_data, dict):
             raise ValueError(
-                "required input %s found '%s'" % (type({}) ,type(data)))
+                "required input %s found '%s'" % (type({}), type(data)))
         self._message.update(msg_data)
 
 
 class RequestMessage(Message):
-    def __init__(self,message=None):
+    def __init__(self, message=None):
         super().__init__(message)
 
     @classmethod
@@ -103,7 +103,7 @@ class RequestMessage(Message):
         message = {}
         message.update({"id": id, "method": method, "params": params})
         message.update(kwargs)
-        return cls(message)    
+        return cls(message)
 
     @property
     def id(self):
@@ -119,14 +119,14 @@ class RequestMessage(Message):
 
 
 class ResponseMessage(Message):
-    def __init__(self,message=None):
+    def __init__(self, message=None):
         super().__init__(message)
 
     @classmethod
     def create(cls, id, results=None, error=None, **kwargs):
         message = {"id": id, "results": results, "error": error}
         message.update(kwargs)
-        return cls(message)    
+        return cls(message)
 
     @property
     def id(self):
@@ -144,7 +144,7 @@ class ResponseMessage(Message):
 class ResponseError:
     def __init__(self, code, message="", *args, **kwargs):
         self._error = {"code": code, "message": message}
-        if len(args)>0:
+        if len(args) > 0:
             for arg in args:
                 self._error.update(arg)
         self._error.update(kwargs)

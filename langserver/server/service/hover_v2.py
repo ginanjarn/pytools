@@ -41,7 +41,7 @@ class Hover:
         except serializer.DeserializeError:
             raise serializer.DeserializeError
 
-    def project(self,path):
+    def project(self, path):
         p = Project(path=path)
         return p
 
@@ -56,14 +56,14 @@ class Hover:
         try:
             c = Script(source=self.src, project=project)
             result = c.help(self.line, self.character)
-    
+
             if len(result) <= 0:
                 return None
             prebuit_doc = self.build_html_layout(result[0])
             ret = {"contents": {"language": "html", "value": prebuit_doc}}
         except Exception:
             raise HoverError
-            
+
         return ret
 
     def build_html_layout(self, data) -> str:

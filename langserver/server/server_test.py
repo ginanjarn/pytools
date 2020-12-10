@@ -68,6 +68,7 @@ def complete(data=None):
     result = request(str(msg))
     print(result)
 
+
 def hover(data=None):
     if data is None:
         data = "import os\nos.path"
@@ -75,7 +76,7 @@ def hover(data=None):
     strspl = data.split("\n")
     ln_idx = len(strspl)
     ln_idx -= 1  # langserver specification use zero-based index
-    last_word = re.findall(r"\w+",data)[-1]
+    last_word = re.findall(r"\w+", data)[-1]
     chr_idx = len(strspl[-1])-len(last_word)
     params = serializer.Completion.serialize(src, ln_idx, chr_idx)
     msg = rpc.RequestMessage().create(25, "textDocument/hover", params)
@@ -83,12 +84,14 @@ def hover(data=None):
     result = request(str(msg))
     print(result)
 
+
 def set_workspace_config(path="this_path"):
     params = serializer.Workspace.serialize(path=path)
-    msg = rpc.RequestMessage().create(40,"workspace/didChangeConfiguration",params)
+    msg = rpc.RequestMessage().create(40, "workspace/didChangeConfiguration", params)
     print(str(msg))
     result = request(str(msg))
     print(result)
+
 
 def formatting(data=None):
     src = """import os,time
@@ -97,7 +100,7 @@ name=os.getcwd()
 
 import re
 ca = re.findall(r"[a-z]*","hello")"""
-    
+
     params = serializer.Formatting.serialize(src)
     msg = rpc.RequestMessage().create(25, "textDocument/formatting", params)
     print(str(msg))

@@ -49,7 +49,7 @@ class Formatting:
             logger.debug(result)
         except Exception:
             raise FormattingError
-                        
+
         return result
 
     def parse_diff_header(self, param):

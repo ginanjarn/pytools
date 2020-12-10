@@ -98,7 +98,6 @@ class Server:
                 logger.debug(content)
                 result = self.process(content)
                 conn.sendall(rpc.encode(result))
-                # conn.sendall(rpc.encode(content))
 
     def loop(self, buffer_size=1024):
         while True:
@@ -111,15 +110,6 @@ class Server:
         self.command[name] = function
 
     def run_command(self, method, params):
-        # results = None
-        # try:
-        #     logger.debug("run_command %s %s", method, params)
-        #     results = self.command[method](params)
-        #     return results
-        # except KeyError:
-        #     logger.exception("MethodNotFound",exc_info=True)
-        #     raise MethodNotFound
-
         func = self.command.get(method, None)
         if func is None:
             raise MethodNotFound
@@ -164,7 +154,7 @@ class Server:
                 logger.debug(err_msg.error)
             finally:
                 resp_msg = rpc.ResponseMessage().create(pid, results, err_msg.error)
-                
+
         return str(resp_msg)
 
     def exit(self, params=None):
@@ -183,7 +173,7 @@ class Server:
         logger.info("initialize")
         return self.capability
 
-    def complete(self, params=None):        
+    def complete(self, params=None):
         try:
             csv = cpv2.Completion(params)
         except serializer.DeserializeError:
@@ -239,7 +229,7 @@ class Server:
             logger.exception("InvalidParams", exc_info=True)
             raise InvalidParams
         except Exception:
-            logger.exception("invalid_params",exc_info=True)
+            logger.exception("invalid_params", exc_info=True)
             raise InternalError
 
         self.workspace = workspace
@@ -278,7 +268,8 @@ def main():
     svr.set_command("initialize", svr.initialize)
     svr.set_command("textDocument/completion", svr.complete)
     svr.set_command("textDocument/hover", svr.hover)
-    svr.set_command("workspace/didChangeConfiguration", svr.change_workspace_config)
+    svr.set_command("workspace/didChangeConfiguration",
+                    svr.change_workspace_config)
     svr.set_command("textDocument/formatting", svr.formatting)
 
     svr.loop()
