@@ -79,14 +79,15 @@ class Hover:
                 if type_ == "keyword":
                     header = "%s %s" % (type_, name)
                 else:
-                    module_name = data.module_name if not (
-                        data.module_name == "__main__") else ""
+                    module_path = data.module_path
+                    module_path = module_path if module_path is not None else ""
                     line = data.line
                     column = (data.column +
                               1) if data.column is not None else None
 
-                    href = "%s:%s:%s" % (module_name, line, column)
+                    href = "%s:%s:%s" % (module_path, line, column)
                     header = "%s <a href=%s>%s</a>" % (type_, href, name)
+                    logger.debug(header)
                 return header
 
             def docstring():
