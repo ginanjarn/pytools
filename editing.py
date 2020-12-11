@@ -130,8 +130,7 @@ class Pytools(sublime_plugin.EventListener):
         self.service_loaded = None
         self.completions = None
 
-        self._current_prefix = ""
-        self._current_pos = 0
+        self.view = None
 
         self.completion_thread = None
         self.hover_thread = None
@@ -174,6 +173,8 @@ class Pytools(sublime_plugin.EventListener):
 
             if self.show_completion(cursor, prefix):
                 self.open_query_completions(view)
+            else:
+                self.completions = None
         else:
             if not self.service_loaded:
                 self.load_service()
@@ -191,9 +192,12 @@ class Pytools(sublime_plugin.EventListener):
 
     def show_completion(self, pos, prefix):
         show = False
-        logger.debug("_current_pos = %s, pos = %s",self._current_pos,pos)
-        logger.debug("_current_prefix = %s, prefix = %s",self._current_prefix,prefix)
-        if self._current_pos == pos or self._current_prefix.startswith(prefix):
+        view = self.view
+        _current_pos = view.sel()[0].a
+        _current_prefix = view.substr(view.word(_current_pos))
+        if _current_pos == pos:
+            show = True
+        if _current_prefix.startswith(prefix) and pos > _current_pos:
             show = True
         if self.completions is None:
             show = False
@@ -224,9 +228,7 @@ class Pytools(sublime_plugin.EventListener):
 
         try:
             if self.valid_scope(view, location):
-                self._current_prefix = prefix
-                self._current_pos = location
-
+                self.view = view
                 completions = None
 
                 if self.completions is not None:
