@@ -264,7 +264,7 @@ class Pytools(sublime_plugin.EventListener):
         word_region = view.word(point)
 
         src = view.substr(sublime.Region(0, word_region.b))
-        row, col = view.rowcol(point)
+        row, col = view.rowcol(word_region.b)
 
         if CLIENT_HUB.ready():
             CLIENT_HUB.set_workspace_config(path=os.path.dirname(view.file_name()))

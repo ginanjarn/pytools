@@ -57,74 +57,85 @@ class Hover:
             c = Script(source=self.src, project=project)
             result = c.help(self.line, self.character)
 
-            if len(result) <= 0:
-                return None
-            prebuit_doc = self.build_html_layout(result[0])
+            logger.debug(self.src)
+            logger.debug("line = %s, character = %s",
+                         self.line, self.character)
+            prebuit_doc = self.build_doc(result[0]) if len(result) > 0 else ""
             ret = {"contents": {"language": "html", "value": prebuit_doc}}
         except Exception:
             raise HoverError
 
         return ret
 
-    def build_html_layout(self, data) -> str:
-        result = ""
+    def build_doc(self, data):
+        result = None
         try:
-            doc_body_l = []
-
             type_ = data.type
             name = data.name
+
+            logger.debug("doc type= %s, name= %s", type_, name)
+
+            def get_header():
+                if type_ == "keyword":
+                    header = "%s %s" % (type_, name)
+                else:
+                    module_name = data.module_name if not (
+                        data.module_name == "__main__") else ""
+                    line = data.line
+                    column = (data.column +
+                              1) if data.column is not None else None
+
+                    href = "%s:%s:%s" % (module_name, line, column)
+                    header = "%s <a href=%s>%s</a>" % (type_, href, name)
+                return header
+
+            def docstring():
+                if type_ in ["class", "function"]:
+                    doc = data.docstring(raw=False)
+                else:
+                    doc = data.docstring(raw=True)
+                return doc
+
+            def split_p(src):
+                return src.split("\n\n")
+
+            def wrap_p(lines):
+                if not isinstance(lines, list):
+                    raise TypeError
+                return ["<p>%s</p>" % (line) for line in lines]
+
+            def split_br(src):
+                return src.split("\n")
+
+            def join_br(lines):
+                if not isinstance(lines, list):
+                    raise TypeError
+                return "<br>".join(lines)
+
+            def join(lines):
+                if not isinstance(lines, list):
+                    raise TypeError
+                return "".join(lines)
+
+            result_body = []
             if type_ == "keyword":
-                result = "<code>{} : {}</code>".format(type_, name)
-            try:
-                module_path = data.module_path if data.module_path else ""
-                definition = "{}:{}:{}".format(
-                    module_path, data.line, data.column + 1)
-                logger.debug(definition)
-                module_name = data.module_name
-                module_name = module_name + "." if module_name != "__main__" else ""
-                f_doc_head = "<code>%s : <a href=\"%s\">%s%s</a></code>" % (
-                    type_, definition, module_name, name)
-                doc_body_l.append(f_doc_head)
-            except Exception:
-                logger.warning("empty definition", exc_info=True)
-
-            def join_section(doc_section, spacer=" "):
-                return spacer.join(doc_section.split("\n"))
-
-            if type_ in ["function", "class"]:
-                doc = data.docstring(raw=False)
-                logger.debug(doc)
-                if doc != "":
-                    doc_sect = doc.split("\n\n")
-                    if len(doc_sect) > 2:
-                        snippet = join_section(doc_sect[0], spacer=" ")
-                        doc_body_l.append("<p><code>%s</code></p>" % snippet)
-
-                        doc_title = doc_sect[1]
-                        doc_body_l.append("<h4>%s</h4>" % doc_title)
-
-                        for d in doc_sect[2:]:
-                            r = join_section(d, spacer="<br>")
-                            doc_body_l.append("<p>%s</p>" % r)
-                    else:
-                        doc_title = doc_sect[0]
-                        doc_body_l.append("<h4>%s</h4>" % doc_title)
+                logger.debug("this is keyword")
+                result_body.append(get_header())
             else:
-                doc = data.docstring(raw=True)
-                logger.debug(doc)
+                result_body.append(get_header())
+                body = []
+                doc = docstring()
                 if doc != "":
-                    doc_sect = doc.split("\n\n")
-                    doc_title = doc_sect[0]
-                    doc_body_l.append("<h4>%s</h4>" % doc_title)
-
-                    if len(doc_sect) > 1:
-                        for d in doc_sect[1:]:
-                            r = join_section(d, spacer="<br>")
-                            doc_body_l.append("<p>%s</p>" % r)
-            f_doc_body = "".join(doc_body_l)
-            logger.debug(f_doc_body)
-            result = f_doc_body
+                    paragraphs = split_p(doc)
+                    for par in paragraphs:
+                        lines = split_br(par)
+                        par_body = join_br(lines)
+                        body.append(par_body)
+                    result_body += wrap_p(body)
+                    
+            logger.debug(result_body)
+            result = "".join(result_body)
         except Exception:
-            logger.exception("build_html_layout", exc_info=True)
+            logger.exception("some wrong", exc_info=True)
         finally:
             return result
