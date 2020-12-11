@@ -98,7 +98,6 @@ class Server:
                 logger.debug(content)
                 result = self.process(content)
                 conn.sendall(rpc.encode(result))
-                # conn.sendall(rpc.encode(content))
 
     def loop(self, buffer_size=1024):
         while True:
@@ -111,26 +110,11 @@ class Server:
         self.command[name] = function
 
     def run_command(self, method, params):
-        # results = None
-        # try:
-        #     logger.debug("run_command %s %s", method, params)
-        #     results = self.command[method](params)
-        #     return results
-        # except KeyError:
-        #     logger.exception("MethodNotFound",exc_info=True)
-        #     raise MethodNotFound
-
         func = self.command.get(method, None)
         if func is None:
             raise MethodNotFound
         results = func(params)
         return results
-
-    def parse_request(self, msg: str):
-        logger.debug(msg)
-        rm = rpc.RequestMessage().parse(msg)
-        logger.debug(rm)
-        return rm
 
     def process(self, data: str):
         logger.debug(data)
@@ -142,15 +126,13 @@ class Server:
         pid = None
 
         try:
-            req_msg = self.parse_request(data)
+            req_msg = rpc.RequestMessage().parse(data)
             pid = req_msg.id
-        except json.JSONDecodeError:
+        except rpc.ParseError:
             logger.exception("unable parse json", exc_info=True)
             err = rpc.ResponseError(PARSE_ERROR)
             err_msg.error = err.error
-
             resp_msg = rpc.ResponseMessage().create(pid, results, err_msg.error)
-            return str(resp_msg)
 
         if req_msg is not None:
             try:
@@ -165,9 +147,15 @@ class Server:
                 err = rpc.ResponseError(INTERNAL_ERROR)
                 err_msg.error = err.error
                 logger.debug(err_msg.error)
+            except InvalidParams:
+                logger.exception("invalid params")
+                err = rpc.ResponseMessage(INVALID_PARAMS)
+                err_msg.error = err.error
+                logger.debug(err_msg.error)
             finally:
                 resp_msg = rpc.ResponseMessage().create(pid, results, err_msg.error)
-                return str(resp_msg)
+
+        return str(resp_msg)
 
     def exit(self, params=None):
         logger.info("exiting")
@@ -186,20 +174,14 @@ class Server:
         return self.capability
 
     def complete(self, params=None):
-        invalid_params = False
-        invalid_service = False
         try:
             csv = cpv2.Completion(params)
-        except KeyError:
+        except serializer.DeserializeError:
             logger.exception("InvalidParams", exc_info=True)
-            invalid_params = True
+            raise InvalidParams
         except Exception:
             logger.exception("InternalError", exc_info=True)
-            invalid_service = True
-
-        if invalid_params:
-            logger.error("invalid_params")
-            raise InvalidParams
+            raise InternalError
 
         try:
             logger.debug("line: %s\ncharacter: %s\nsrc +++++ \n%s",
@@ -210,30 +192,20 @@ class Server:
             result = csv.complete(project=project)
             logger.debug(result)
         except Exception:
-            logger.exception("InternalError", exc_info=True)
-            invalid_service = True
-
-        if invalid_service:
-            logger.error("invalid_service")
+            logger.exception("CompletionError", exc_info=True)
             raise InternalError
 
         return result
 
     def hover(self, params=None):
-        invalid_params = False
-        invalid_service = False
         try:
             hsv = hvv2.Hover(params)
-        except KeyError:
+        except serializer.DeserializeError:
             logger.exception("InvalidParams", exc_info=True)
-            invalid_params = True
+            raise InvalidParams
         except Exception:
             logger.exception("InternalError", exc_info=True)
-            invalid_service = True
-
-        if invalid_params:
-            logger.error("invalid_params")
-            raise InvalidParams
+            raise InternalError
 
         try:
             logger.debug("line: %s\ncharacter: %s\nsrc +++++ \n%s",
@@ -245,10 +217,6 @@ class Server:
             logger.debug(result)
         except Exception:
             logger.exception("InternalError", exc_info=True)
-            invalid_service = True
-
-        if invalid_service:
-            logger.error("invalid_service")
             raise InternalError
 
         return result
@@ -257,28 +225,26 @@ class Server:
         workspace = None
         try:
             workspace = serializer.Workspace.deserialize(params)
-        except Exception:
-            logger.exception("invalid_params",exc_info=True)
-        if workspace is None:
+        except serializer.DeserializeError:
+            logger.exception("InvalidParams", exc_info=True)
             raise InvalidParams
+        except Exception:
+            logger.exception("invalid_params", exc_info=True)
+            raise InternalError
+
         self.workspace = workspace
         logger.debug(self.workspace.path)
+        return None
 
     def formatting(self, param):
-        invalid_params = False
-        invalid_service = False
         try:
             fsv = fmv2.Formatting(param)
-        except KeyError:
+        except serializer.DeserializeError:
             logger.exception("InvalidParams", exc_info=True)
-            invalid_params = True
+            raise InvalidParams
         except Exception:
             logger.exception("InternalError", exc_info=True)
-            invalid_service = True
-
-        if invalid_params:
-            logger.error("invalid_params")
-            raise InvalidParams
+            raise InternalError
 
         try:
             logger.debug("src +++++ \n%s", fsv.src)
@@ -286,10 +252,6 @@ class Server:
             logger.debug(result)
         except Exception:
             logger.exception("InternalError", exc_info=True)
-            invalid_service = True
-
-        if invalid_service:
-            logger.error("invalid_service")
             raise InternalError
 
         return result
@@ -306,7 +268,8 @@ def main():
     svr.set_command("initialize", svr.initialize)
     svr.set_command("textDocument/completion", svr.complete)
     svr.set_command("textDocument/hover", svr.hover)
-    svr.set_command("workspace/didChangeConfiguration", svr.change_workspace_config)
+    svr.set_command("workspace/didChangeConfiguration",
+                    svr.change_workspace_config)
     svr.set_command("textDocument/formatting", svr.formatting)
 
     svr.loop()

@@ -10,7 +10,8 @@ from . import rpc, serializer
 logger = logging.getLogger(__name__)
 # logger.setLevel(logging.DEBUG)
 sh = logging.StreamHandler()
-sh.setFormatter(logging.Formatter('%(levelname)s\t%(module)s: %(lineno)d\t%(message)s'))
+sh.setFormatter(logging.Formatter(
+    '%(levelname)s\t%(module)s: %(lineno)d\t%(message)s'))
 sh.setLevel(logging.DEBUG)
 logger.addHandler(sh)
 
@@ -27,6 +28,16 @@ class NotInitialized(Exception):
 
 class ServiceUnavailable(Exception):
     """Service unavailable"""
+    pass
+
+
+class ServerOffline(Exception):
+    """Server offline"""
+    pass
+
+
+class InternalError(Exception):
+    """Internal error"""
     pass
 
 
@@ -58,26 +69,26 @@ class Client:
                     break
                 except rpc.ContentOverflow:
                     break
-        return data    
-    
-    @staticmethod
-    def request(msg,host,port):
-        logger.debug(msg)
-        emsg = rpc.encode(msg)
-        result = Client.send_message(emsg,host=host,port=port)
-        result = rpc.decode(result)
-        logger.debug(result)
-        return result        
+        return data
 
     @staticmethod
-    def run_server(python=None,script=None,env=None):
+    def request(msg, host, port):
+        logger.debug(msg)
+        emsg = rpc.encode(msg)
+        result = Client.send_message(emsg, host=host, port=port)
+        result = rpc.decode(result)
+        logger.debug(result)
+        return result
+
+    @staticmethod
+    def run_server(python=None, script=None, env=None):
         python_runtime = "python"
         if python is not None:
             python_runtime = python
         abspath = os.path.abspath(__file__)
         logger.debug(abspath)
         langserver_path = abspath.split(os.sep)[:-2]
-        server_script = os.sep.join(langserver_path + ["server","server.py"])
+        server_script = os.sep.join(langserver_path + ["server", "server.py"])
         if script is not None:
             server_script = script
 
@@ -98,18 +109,18 @@ class Client:
                 server_proc = subprocess.Popen(
                     run_server_cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE, shell=True, env=env)
+
+            _, serr = server_proc.communicate()
+            if server_proc.returncode != 0:
+                logger.error("server error\n%s", str.strip(serr.decode()))
+                raise ServerError
+        except OSError:
+            logger.debug("OSError")
         except Exception:
             logger.exception("cannot run_server")
-
-        if server_proc is None:
             raise ServerError
 
-        _, serr = server_proc.communicate()
-        if server_proc.returncode != 0:
-            logger.error("server error\n%s",serr.decode())
-            raise ServerError
-
-    def __init__(self,host=None,port=None):
+    def __init__(self, host=None, port=None):
         self.host = host
         self.port = port
 
@@ -123,28 +134,29 @@ class Client:
         self.cached_workspace = None
         self.server_thread = None
 
-
-    def _request(self,msg):
+    def _request(self, msg):
         try:
-            response = Client.request(msg=msg,host=self.host,port=self.port)
+            response = Client.request(msg=msg, host=self.host, port=self.port)
             return response
-        except (ConnectionError,ConnectionAbortedError,
-            ConnectionRefusedError,ConnectionResetError):
-            logger.exception("connection server error",exc_info=False)
-            if self.server_valid == True:
-                self._start_server_thread()
+        except ConnectionError:
+            # logger.exception("connection server error", exc_info=False)
+            raise ServerOffline
         except Exception:
-            logger.exception("internal error",exc_info=True)
+            logger.exception("internal error", exc_info=True)
+            raise InternalError
 
     def _server_thread(self):
-        try:
-            Client.run_server(python=self.python, script=self.server_script, env=self.env)
-        except Exception:
-            logger.exception("run_server_thread exception", exc_info=True)
-            self.server_valid = False
+        if self.server_valid:
+            try:
+                Client.run_server(python=self.python,
+                                  script=self.server_script, env=self.env)
+            except Exception:
+                logger.exception("run_server_thread exception", exc_info=True)
+                self.server_valid = False
 
     def _start_server_thread(self):
         logger.info("running server")
+
         def make_thread():
             thread = threading.Thread(target=self._server_thread)
             return thread
@@ -156,16 +168,12 @@ class Client:
                 self.server_thread = make_thread()
                 self.server_thread.start()
 
-    def _run_server(self):
+    def _init_server(self):
         if self.server_valid is None:
             self.server_valid = True
         else:
             logger.info("server already running")
             return
-        # if self.server_valid:
-        #     self._start_server_thread()
-        # else:
-        #     logger.info("ServerError")
 
     def _exit_services(self):
         self.exit()
@@ -179,9 +187,8 @@ class Client:
     def set_python_runtime(self, python=None, env=None):
         self.python = python
         self.env = env
-        logger.debug("python = %s, env = %s",self.python,
-            self.env)
-        # self._exit_services()
+        logger.debug("python = %s, env = %s", self.python,
+                     self.env)
 
     def exit(self):
         msg = rpc.RequestMessage().create(self._req_id, "exit")
@@ -195,21 +202,23 @@ class Client:
                 self.capability = None
                 self.server_valid = None
         except Exception:
-            logger.exception("exit exception",exc_info=True)    
-    
+            logger.exception("exit exception", exc_info=True)
+
     def initialize(self):
-        self._run_server()
-        msg = rpc.RequestMessage().create(self._req_id, "initialize")
-        logger.debug(str(msg))
-        result = self._request(str(msg))
-        logger.debug(result)
+        self._init_server()
         try:
+            msg = rpc.RequestMessage().create(self._req_id, "initialize")
+            logger.debug(str(msg))
+            result = self._request(str(msg))
+            logger.debug(result)
             rmsg = rpc.ResponseMessage.parse(result)
             results = rmsg.results
             logger.debug(results)
             self.capability = results
+        except ServerOffline:
+            self._start_server_thread()
         except Exception:
-            logger.exception("initialize exception", exc_info=False)    
+            logger.exception("initialize exception", exc_info=False)
 
     def ready(self):
         ready = True
@@ -219,14 +228,13 @@ class Client:
             ready = False
         return ready
 
-    def ping(self,data=None):
+    def ping(self, data=None):
         msg = rpc.RequestMessage().create(self._req_id, "ping", data)
         logger.debug(str(msg))
         result = self._request(str(msg))
         logger.debug(result)
-    
-    
-    def complete(self,source, line, character):
+
+    def complete(self, source, line, character):
         if self.capability is None:
             raise NotInitialized
 
@@ -234,8 +242,8 @@ class Client:
             capable = self.capability["completionProvider"]["resolveProvider"]
             if not capable:
                 raise ServiceUnavailable
-        
-            params = serializer.Completion.serialize(source,line,character)
+
+            params = serializer.Completion.serialize(source, line, character)
             msg = rpc.RequestMessage().create(self._req_id, "textDocument/completion", params)
             logger.debug(str(msg))
             result = self._request(str(msg))
@@ -243,10 +251,12 @@ class Client:
             rmsg = rpc.ResponseMessage.parse(result)
             results = rmsg.results
             return results
+        except ServerOffline:
+            self._start_server_thread()
         except Exception:
             logger.exception("complete exception", exc_info=True)
-    
-    def hover(self,source, line, character):
+
+    def hover(self, source, line, character):
         if self.capability is None:
             raise NotInitialized
         try:
@@ -254,7 +264,7 @@ class Client:
             if not capable:
                 raise ServiceUnavailable
 
-            params = serializer.Hover.serialize(source,line,character)
+            params = serializer.Hover.serialize(source, line, character)
             msg = rpc.RequestMessage().create(self._req_id, "textDocument/hover", params)
             logger.debug(str(msg))
             result = self._request(str(msg))
@@ -262,25 +272,28 @@ class Client:
             rmsg = rpc.ResponseMessage.parse(result)
             results = rmsg.results
             return results
+        except ServerOffline:
+            self._start_server_thread()
         except Exception:
-            logger.exception("hover exception",exc_info=True)
-    
+            logger.exception("hover exception", exc_info=True)
+
     def set_workspace_config(self, path=""):
         workspace = serializer.Workspace.serialize(path=path)
         if self.cached_workspace != workspace:
             self.cached_workspace = workspace
-    
+
             params = self.cached_workspace
-    
-            msg = rpc.RequestMessage().create(self._req_id,"workspace/didChangeConfiguration",params)
+
+            msg = rpc.RequestMessage().create(
+                self._req_id, "workspace/didChangeConfiguration", params)
             logger.debug(str(msg))
             result = self._request(str(msg))
             logger.debug(result)
-    
+
     def formatting(self, source):
         if self.capability is None:
             raise NotInitialized
-    
+
         try:
             capable = self.capability["documentFormattingProvider"]
             if not capable:
@@ -293,5 +306,7 @@ class Client:
             rmsg = rpc.ResponseMessage.parse(result)
             results = rmsg.results
             return results
+        except ServerOffline:
+            self._start_server_thread()
         except Exception:
             logger.exception("formatting exception", exc_info=True)

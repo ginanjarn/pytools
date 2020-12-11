@@ -59,8 +59,13 @@ def decode(data: bytes) -> str:
         return body
 
 
+class ParseError(Exception):
+    """Unable to parse"""
+    pass
+
+
 class Message:
-    def __init__(self,message=None):
+    def __init__(self, message=None):
         self._message = {"jsonrpc": "2.0"}
         if message is not None:
             self._message.update(message)
@@ -70,7 +75,11 @@ class Message:
 
     @classmethod
     def parse(cls, src: str):
-        message = json.loads(src)
+        try:
+            message = json.loads(src)
+        except Exception:
+            logger.exception("error parse message")
+            raise ParseError
         return cls(message)
 
     @property
@@ -79,14 +88,14 @@ class Message:
 
     @message.setter
     def message(self, msg_data: dict):
-        if type(msg_data) != dict:
+        if not isinstance(msg_data, dict):
             raise ValueError(
-                "required input %s found '%s'" % (type({}) ,type(data)))
+                "required input %s found '%s'" % (type({}), type(data)))
         self._message.update(msg_data)
 
 
 class RequestMessage(Message):
-    def __init__(self,message=None):
+    def __init__(self, message=None):
         super().__init__(message)
 
     @classmethod
@@ -94,7 +103,7 @@ class RequestMessage(Message):
         message = {}
         message.update({"id": id, "method": method, "params": params})
         message.update(kwargs)
-        return cls(message)    
+        return cls(message)
 
     @property
     def id(self):
@@ -110,14 +119,14 @@ class RequestMessage(Message):
 
 
 class ResponseMessage(Message):
-    def __init__(self,message=None):
+    def __init__(self, message=None):
         super().__init__(message)
 
     @classmethod
     def create(cls, id, results=None, error=None, **kwargs):
         message = {"id": id, "results": results, "error": error}
         message.update(kwargs)
-        return cls(message)    
+        return cls(message)
 
     @property
     def id(self):
@@ -135,15 +144,15 @@ class ResponseMessage(Message):
 class ResponseError:
     def __init__(self, code, message="", *args, **kwargs):
         self._error = {"code": code, "message": message}
-        if len(args)>0:
+        if len(args) > 0:
             for arg in args:
                 self._error.update(arg)
         self._error.update(kwargs)
 
     @classmethod
     def parse(cls, params):
-        if type(params) != type({}):
-            raise ValueError
+        if not isinstance(params, dict):
+            raise ParseError
 
         code = params.pop("code")
         message = params.pop("message")
@@ -155,7 +164,7 @@ class ResponseError:
 
     @error.setter
     def error(self, err_data: dict):
-        if type(err_data) != dict:
+        if not isinstance(err_data, dict):
             raise ValueError(
                 "required input <class 'dict'> found '%s'" % type(data))
         self._error.update(err_data)

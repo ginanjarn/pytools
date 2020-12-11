@@ -26,19 +26,30 @@ def capability():
     return {"documentFormattingProvider": FORMATTING_CAPABLE}
 
 
+class FormattingError(Exception):
+    """Formatting Error"""
+
+
 class Formatting:
     def __init__(self, params):
-        cparam = serializer.Formatting.deserialize(params)
-        self.src = cparam.src
+        try:
+            cparam = serializer.Formatting.deserialize(params)
+            self.src = cparam.src
+        except serializer.DeserializeError:
+            raise serializer.DeserializeError
 
     def format_code(self, src=None):
-        if src is not None:
-            self.src = src
-        # args = autopep8.parse_args(["--diff","-"], apply_config=False)
-        # fixed_code = autopep8.fix_code(self.src, args, encoding=None)
-        fixed_code = autopep8.fix_code(self.src)
-        result = self.extract_updated(self.src, fixed_code)
-        logger.debug(result)
+        try:
+            if src is not None:
+                self.src = src
+            # args = autopep8.parse_args(["--diff","-"], apply_config=False)
+            # fixed_code = autopep8.fix_code(self.src, args, encoding=None)
+            fixed_code = autopep8.fix_code(self.src)
+            result = self.extract_updated(self.src, fixed_code)
+            logger.debug(result)
+        except Exception:
+            raise FormattingError
+
         return result
 
     def parse_diff_header(self, param):
