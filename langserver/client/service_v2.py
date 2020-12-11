@@ -109,15 +109,15 @@ class Client:
                 server_proc = subprocess.Popen(
                     run_server_cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE, shell=True, env=env)
+
+            _, serr = server_proc.communicate()
+            if server_proc.returncode != 0:
+                logger.error("server error\n%s", str.strip(serr.decode()))
+                raise ServerError
+        except OSError:
+            logger.debug("OSError")
         except Exception:
             logger.exception("cannot run_server")
-
-        if server_proc is None:
-            raise ServerError
-
-        _, serr = server_proc.communicate()
-        if server_proc.returncode != 0:
-            logger.error("server error\n%s", str.strip(serr.decode()))
             raise ServerError
 
     def __init__(self, host=None, port=None):
@@ -138,9 +138,8 @@ class Client:
         try:
             response = Client.request(msg=msg, host=self.host, port=self.port)
             return response
-        except (ConnectionError, ConnectionAbortedError,
-                ConnectionRefusedError, ConnectionResetError):
-            logger.exception("connection server error", exc_info=False)
+        except ConnectionError:
+            # logger.exception("connection server error", exc_info=False)
             raise ServerOffline
         except Exception:
             logger.exception("internal error", exc_info=True)
