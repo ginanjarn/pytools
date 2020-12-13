@@ -28,18 +28,30 @@ class Manager:
     def validate(*args, **kwargs):
         pass
 
+    def make_setting_property(path):
+        pass
+
+    def setup(settings, path):
+        pass
+
+    def env_list(settings):
+        pass
+
+    def remove(settings, env_id):
+        pass
+
 
 class Conda(Manager):
     @staticmethod
     def validate_nt(path):
-        if not os.path.isfile(os.path.join(path,"python.exe")):
-            logger.debug(os.path.join(path,"python.exe"))
+        if not os.path.isfile(os.path.join(path, "python.exe")):
+            logger.debug(os.path.join(path, "python.exe"))
             raise InvalidEnvironment
         return True
 
     @staticmethod
     def validate_posix(path):
-        if not os.path.isfile(os.path.join(path,"bin","python")):
+        if not os.path.isfile(os.path.join(path, "bin", "python")):
             raise InvalidEnvironment
         return True
 
@@ -72,22 +84,20 @@ class Conda(Manager):
     @staticmethod
     def make_setting_property(path):
         pid = random.random()
-        return {"id":pid, "name":os.path.basename(path),"path":path, "manager":"conda"}
+        return {"id": pid, "path": path, "manager": "conda"}
 
     @staticmethod
     def setup(settings, path):
         envs = Conda.browse_envs(path)
         logger.debug(envs)
 
-        settings.set("condabin",os.path.join(envs[0], "condabin"))
-        
+        settings.set("condabin", os.path.join(envs[0], "condabin"))
+
         envs = [Conda.make_setting_property(env) for env in envs]
         try:
             settings.set("conda")["list"]
         except Exception:
-            settings.set("conda",{"list":envs})
-
-
+            settings.set("conda", {"list": envs})
 
     @staticmethod
     def env_list(settings):
@@ -103,7 +113,7 @@ class Conda(Manager):
         home_path = os.path.expanduser("~")
 
         def conda_dir(name):
-            found = re.findall(r"\w+conda\w*",name)
+            found = re.findall(r"\w+conda\w*", name)
             conda = found[0] if len(found) > 0 else None
             return conda
 
@@ -118,11 +128,11 @@ class Conda(Manager):
     def remove(settings, env_id):
         try:
             envs = settings.get("conda")["list"]
-            matches = list(filter(lambda env: env["id"]==env_id, envs))
+            matches = list(filter(lambda env: env["id"] == env_id, envs))
             if len(matches) > 0:
                 index = envs.index(matches[0])
                 envs.pop(index)
-            settings.set("conda",{"list":envs})
+            settings.set("conda", {"list": envs})
         except Exception:
             pass
 
@@ -130,14 +140,14 @@ class Conda(Manager):
 class Venv(Manager):
     @staticmethod
     def validate_nt(path):
-        if not os.path.isfile(os.path.join(path,"Scripts","python.exe")):
-            logger.debug(os.path.join(path,"Scripts","python.exe"))
+        if not os.path.isfile(os.path.join(path, "Scripts", "python.exe")):
+            logger.debug(os.path.join(path, "Scripts", "python.exe"))
             raise InvalidEnvironment
         return True
 
     @staticmethod
     def validate_posix(path):
-        if not os.path.isfile(os.path.join(path,"bin","python")):
+        if not os.path.isfile(os.path.join(path, "bin", "python")):
             raise InvalidEnvironment
         return True
 
@@ -151,7 +161,7 @@ class Venv(Manager):
     @staticmethod
     def make_setting_property(path):
         pid = random.random()
-        return {"id":pid, "name":os.path.basename(path),"path":path,"manager":"venv"}
+        return {"id": pid, "path": path, "manager": "venv"}
 
     @staticmethod
     def setup(settings, path):
@@ -160,13 +170,13 @@ class Venv(Manager):
             Venv.validate(path)
             env = Venv.make_setting_property(path)
         except Exception:
-            logger.debug("setup error",exc_info=True)
+            logger.debug("setup error", exc_info=True)
 
         if env is not None:
             try:
                 settings.get("venv")["list"].append(env)
             except Exception:
-                settings.set("venv",{"list":[env]})
+                settings.set("venv", {"list": [env]})
 
     @staticmethod
     def env_list(settings):
@@ -181,11 +191,11 @@ class Venv(Manager):
     def remove(settings, env_id):
         try:
             envs = settings.get("venv")["list"]
-            matches = list(filter(lambda env: env["id"]==env_id, envs))
+            matches = list(filter(lambda env: env["id"] == env_id, envs))
             if len(matches) > 0:
                 index = envs.index(matches[0])
                 envs.pop(index)
-            settings.set("venv",{"list":envs})
+            settings.set("venv", {"list": envs})
         except Exception:
             pass
 
@@ -198,7 +208,8 @@ class Runtime:
 
     @staticmethod
     def quick_pane(window, items, callback, default_selected=-1):
-        window.show_quick_panel(items, callback, flags=sublime.KEEP_OPEN_ON_FOCUS_LOST|sublime.MONOSPACE_FONT)
+        window.show_quick_panel(
+            items, callback, flags=sublime.KEEP_OPEN_ON_FOCUS_LOST | sublime.MONOSPACE_FONT)
 
     @staticmethod
     def setup(manager, settings, path):
@@ -227,8 +238,8 @@ class Runtime:
 
 class PytoolsEnvironmentSetupCommand(sublime_plugin.TextCommand):
     def run(self, edit):
-        environment = ["conda","venv"]
-        Runtime.quick_pane(self.view.window(),environment, self.init_setup)
+        environment = ["conda", "venv"]
+        Runtime.quick_pane(self.view.window(), environment, self.init_setup)
 
     def init_setup(self, index):
         self.manager = ["conda", "venv"][index]
@@ -253,8 +264,9 @@ class PytoolsSetEnvironment(sublime_plugin.TextCommand):
         try:
             self.settings = sublime.load_settings("Pytools.sublime-settings")
             self.envlist = Runtime.env_list(self.settings)
-            envsname = [env["name"] for env in self.envlist]
-    
+            envsname = ["%s    %s" % (env["manager"], env["path"])
+                        for env in self.envlist]
+
             Runtime.quick_pane(self.view.window(), envsname, self.select_env)
         except Exception:
             logger.exception("set environment error", exc_info=True)
@@ -264,15 +276,15 @@ class PytoolsSetEnvironment(sublime_plugin.TextCommand):
             if index > -1:
                 env = self.envlist[index]
                 prefix = env["path"]
+                self.settings.set("active_environment", prefix)
                 env_path = os.pathsep.join([prefix,
-                                        os.path.join(
-                                            prefix, "Library", "mingw-w64", "bin"),
-                                        os.path.join(
-                                            prefix, "Library", "usr", "bin"),
-                                        os.path.join(
-                                            prefix, "Library", "bin"),
-                                        os.path.join(prefix, "Scripts"),
-                                        os.path.join(prefix, "condabin")])
+                                            os.path.join(
+                                                prefix, "Library", "mingw-w64", "bin"),
+                                            os.path.join(
+                                                prefix, "Library", "usr", "bin"),
+                                            os.path.join(
+                                                prefix, "Library", "bin"),
+                                            os.path.join(prefix, "Scripts")])
                 self.set("python", env_path, env["manager"])
         except Exception:
             pass
@@ -282,6 +294,7 @@ class PytoolsSetEnvironment(sublime_plugin.TextCommand):
         self.settings.set("path", path)
         self.settings.set("manager", manager)
         sublime.save_settings("Pytools.sublime-settings")
+        self.view.run_command("pytools_shutdownserver")
 
 
 class PytoolsRemoveEnvironment(sublime_plugin.TextCommand):
