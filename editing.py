@@ -73,7 +73,7 @@ class ClientHub(Client):
                 return func(*args, **kwargs)
             return wrapper
 
-    def load_runtime(self):
+    def load_runtime(self, view):
         python = load_settings("python")
         env = get_sysenv()
 
@@ -103,7 +103,7 @@ class PytoolsFormatCommand(sublime_plugin.TextCommand):
         if CLIENT_HUB.ready():
             self.do_formatting(edit)
         else:
-            CLIENT_HUB.load_runtime()
+            CLIENT_HUB.load_runtime(view)
             CLIENT_HUB.runnable(CLIENT_HUB.initialize())
 
     @CLIENT_HUB.runnable
@@ -135,9 +135,9 @@ class Pytools(sublime_plugin.EventListener):
         self.completion_thread = None
         self.hover_thread = None
 
-    def load_service(self):
+    def load_service(self, view):
         try:
-            CLIENT_HUB.load_runtime()
+            CLIENT_HUB.load_runtime(view)
             self.service_loaded = True
             logger.debug("load_service")
         except:
@@ -177,7 +177,7 @@ class Pytools(sublime_plugin.EventListener):
                 self.completions = None
         else:
             if not self.service_loaded:
-                self.load_service()
+                self.load_service(view)
             CLIENT_HUB.initialize()
 
     def open_query_completions(self, view):
@@ -276,7 +276,7 @@ class Pytools(sublime_plugin.EventListener):
             hover.show_popup(view=view, content=formatted_result, location=point)
         else:
             if not self.service_loaded:
-                self.load_service()
+                self.load_service(view)
             CLIENT_HUB.initialize()
 
     def on_hover(self, view, point, hover_zone):
