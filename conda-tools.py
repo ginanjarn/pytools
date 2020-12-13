@@ -296,7 +296,7 @@ class PytoolsSetEnvironment(sublime_plugin.WindowCommand):
         self.settings.set("path", path)
         self.settings.set("manager", manager)
         sublime.save_settings("Pytools.sublime-settings")
-        self.view.run_command("pytools_shutdownserver")
+        self.window.run_command("pytools_shutdownserver")
 
 
 class PytoolsRemoveEnvironment(sublime_plugin.WindowCommand):
