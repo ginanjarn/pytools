@@ -264,6 +264,7 @@ class PytoolsEnvironmentSetupCommand(sublime_plugin.WindowCommand):
         settings = sublime.load_settings("Pytools.sublime-settings")
         Runtime.setup(self.manager, settings, path)
         sublime.save_settings("Pytools.sublime-settings")
+        self.window.run_command("pytools_set_environment")
 
 
 class PytoolsSetEnvironment(sublime_plugin.WindowCommand):
