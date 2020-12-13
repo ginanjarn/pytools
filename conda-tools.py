@@ -175,9 +175,14 @@ class Venv(Manager):
             logger.debug("setup error", exc_info=True)
 
         if env is not None:
-            try:
-                settings.get("venv")["list"].append(env)
-            except Exception:
+            venv_stt = settings.get("venv")
+            if venv_stt is not None:
+                try:
+                    venv_stt["list"].append(env)
+                except Exception:
+                    venv_stt["list"] = [env]
+                settings.set("venv", venv_stt)
+            else:
                 settings.set("venv", {"list": [env]})
 
     @staticmethod
