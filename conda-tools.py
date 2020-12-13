@@ -95,7 +95,9 @@ class Conda(Manager):
 
         envs = [Conda.make_setting_property(env) for env in envs]
         try:
-            settings.set("conda")["list"]
+            saved = settings.get("conda")
+            saved["list"] = envs
+            settings.set("conda", saved)
         except Exception:
             settings.set("conda", {"list": envs})
 
@@ -236,10 +238,10 @@ class Runtime:
             pass
 
 
-class PytoolsEnvironmentSetupCommand(sublime_plugin.TextCommand):
-    def run(self, edit):
+class PytoolsEnvironmentSetupCommand(sublime_plugin.WindowCommand):
+    def run(self):
         environment = ["conda", "venv"]
-        Runtime.quick_pane(self.view.window(), environment, self.init_setup)
+        Runtime.quick_pane(self.window, environment, self.init_setup)
 
     def init_setup(self, index):
         self.manager = ["conda", "venv"][index]
@@ -247,9 +249,9 @@ class PytoolsEnvironmentSetupCommand(sublime_plugin.TextCommand):
             path = Conda.scan_default_path()
             self.setup(path)
             if path is None:
-                Runtime.input_pane(self.view.window(), "Path", self.setup)
+                Runtime.input_pane(self.window, "Path", self.setup)
         elif index == VENV:
-            Runtime.input_pane(self.view.window(), "Path", self.setup)
+            Runtime.input_pane(self.window, "Path", self.setup)
 
     def setup(self, path):
         logger.debug(path)
@@ -259,15 +261,15 @@ class PytoolsEnvironmentSetupCommand(sublime_plugin.TextCommand):
         sublime.save_settings("Pytools.sublime-settings")
 
 
-class PytoolsSetEnvironment(sublime_plugin.TextCommand):
-    def run(self, edit):
+class PytoolsSetEnvironment(sublime_plugin.WindowCommand):
+    def run(self):
         try:
             self.settings = sublime.load_settings("Pytools.sublime-settings")
             self.envlist = Runtime.env_list(self.settings)
             envsname = ["%s    %s" % (env["manager"], env["path"])
                         for env in self.envlist]
 
-            Runtime.quick_pane(self.view.window(), envsname, self.select_env)
+            Runtime.quick_pane(self.window, envsname, self.select_env)
         except Exception:
             logger.exception("set environment error", exc_info=True)
 
@@ -297,13 +299,13 @@ class PytoolsSetEnvironment(sublime_plugin.TextCommand):
         self.view.run_command("pytools_shutdownserver")
 
 
-class PytoolsRemoveEnvironment(sublime_plugin.TextCommand):
-    def run(self, edit):
+class PytoolsRemoveEnvironment(sublime_plugin.WindowCommand):
+    def run(self):
         self.settings = sublime.load_settings("Pytools.sublime-settings")
         self.envlist = Runtime.env_list(self.settings)
-        envsname = [env["name"] for env in self.envlist]
+        envsname = [env["path"] for env in self.envlist]
 
-        Runtime.quick_pane(self.view.window(), envsname, self.select_env)
+        Runtime.quick_pane(self.window, envsname, self.select_env)
 
     def select_env(self, index):
         if index > -1:
