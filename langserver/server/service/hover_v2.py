@@ -1,6 +1,7 @@
 """Hover help module"""
 
 import logging
+import html
 
 
 logger = logging.getLogger("hover")
@@ -95,6 +96,8 @@ class Hover:
                     doc = data.docstring(raw=False)
                 else:
                     doc = data.docstring(raw=True)
+
+                doc = html.escape(doc, quote=False)
                 return doc
 
             def split_p(src):
