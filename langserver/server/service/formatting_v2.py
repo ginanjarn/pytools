@@ -1,59 +1,76 @@
-import difflib
 import logging
-formatting_error = None
-try:
-    import autopep8
-except ModuleNotFoundError:
-    formatting_error = "autopep8"
 
 
 logger = logging.getLogger("formatting")
 # logger.setLevel(logging.DEBUG)
 sh = logging.StreamHandler()
-sh.setFormatter(logging.Formatter('%(levelname)s\t%(module)s: %(lineno)d\t%(message)s'))
+sh.setFormatter(logging.Formatter(
+    '%(levelname)s\t%(module)s: %(lineno)d\t%(message)s'))
 sh.setLevel(logging.DEBUG)
 logger.addHandler(sh)
 
 
-class Formatting:
-    def __init__(self, source):
-        self.src = source
+FORMATTING_CAPABLE = True
 
-    def format_code(self):
+
+try:
+    import autopep8
+    import difflib
+    import re
+    from . import serializer
+except ModuleNotFoundError:
+    FORMATTING_CAPABLE = False
+
+
+def capability():
+    return {"documentFormattingProvider": FORMATTING_CAPABLE}
+
+
+class FormattingError(Exception):
+    """Formatting Error"""
+
+
+class Formatting:
+    def __init__(self, params):
         try:
+            cparam = serializer.Formatting.deserialize(params)
+            self.src = cparam.src
+        except serializer.DeserializeError:
+            raise serializer.DeserializeError
+
+    def format_code(self, src=None):
+        try:
+            if src is not None:
+                self.src = src
             # args = autopep8.parse_args(["--diff","-"], apply_config=False)
             # fixed_code = autopep8.fix_code(self.src, args, encoding=None)
             fixed_code = autopep8.fix_code(self.src)
             result = self.extract_updated(self.src, fixed_code)
             logger.debug(result)
-            return result, None
-        except Exception as e:
-            logger.error(e)
-            return None, str(e)
+        except Exception:
+            raise FormattingError
 
-    def extract_diff_marker(self, mark) -> (any, any):
-        sub_start, sub_modified = 0, 0
-        add_start, add_modified = 0, 0
-        # @@ -25,6 +25,7 @@
-        mark_list = mark.split(" ")  # ["@@","-25,6","+25,7","@@"]
-        sub, add = mark_list[1], mark_list[2]  # ["-25,6","+25,7"]
-        sub, add = sub[1:], add[1:]  # ["25,6","25,7"]
-        sub, add = sub.split(","), add.split(",")  # [("25","6"),("25","7")]
-        if len(sub) == 1:
-            sub_start, sub_modified = int(sub[0]), 1   # (25,0)
-        elif len(sub) == 2:
-            sub_start, sub_modified = int(sub[0]), int(sub[1])   # (25,6)
+        return result
+
+    def parse_diff_header(self, param):
+        logger.debug(param)
+        result = None
+        # @@ -a,b +c,d @@
+        rst = re.findall(r"@@\s\-(\d*),(\d*)\s\+(\d*),(\d*)\s@@", param)
+        # logger.debug(rst)
+        if len(rst) == 1:
+            result = rst[0]
+            result = (int(result[0]), int(result[1])
+                      ), (int(result[2]), int(result[3]))
         else:
-            raise Exception("error parsing diff identifier")
-        if len(add) == 1:
-            add_start, add_modified = int(add[0]), 1   # (25,0)
-        elif len(add) == 2:
-            add_start, add_modified = int(add[0]), int(add[1])   # (25,7)
-        else:
-            raise Exception("error parsing diff identifier")
-        result = ((sub_start, sub_modified),
-                  (add_start, add_modified))   # (25,6),(25,7)
-        logger.debug(result)
+            rst = re.findall(r"@@\s\-(\d*),(\d*)\s@@", param)
+            # logger.debug(rst)
+            if len(rst) == 1:
+                result = rst[0]
+                result = int(result[0]), int(result[1])
+        if result is None:
+            raise ValueError
+        logger.debug(rst)
         return result
 
     def extract_updated(self, old_src, new_src) -> any:
@@ -74,7 +91,7 @@ class Formatting:
                 if line.startswith("@"):
                     index += 1
                     TextEdit = {}
-                    sub, _ = self.extract_diff_marker(line)
+                    sub, _ = self.parse_diff_header(line)
                     start = {"line": sub[0], "character": 0}
                     endline = sub[0]+sub[1]-1
                     end = {"line": endline, "character": len(
@@ -92,5 +109,5 @@ class Formatting:
                     except IndexError:
                         continue
             return TextEdit_l
-        except Exception as e:
-            logger.error(e)
+        except Exception:
+            logger.error("extract_updated", exc_info=True)

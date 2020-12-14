@@ -1,17 +1,28 @@
 import sublime  # pylint: disable=import-error
 import sublime_plugin  # pylint: disable=import-error
-import difflib
 import subprocess
 import threading
 import os
 import logging
-from .langserver.client.service import Client  # pylint: disable=relative-beyond-top-level
+from .langserver.client.service_v2 import Client  # pylint: disable=relative-beyond-top-level
 from .langserver.client.sublimetext import completion, hover, formatting  # pylint: disable=relative-beyond-top-level
 
-logging.basicConfig(format='%(levelname)s\t%(module)s: %(lineno)d\t%(message)s')
 logger = logging.getLogger(__name__)
 # logger.setLevel(logging.DEBUG)
+sh = logging.StreamHandler()
+sh.setFormatter(logging.Formatter('%(levelname)s\t%(module)s: %(lineno)d\t%(message)s'))
+sh.setLevel(logging.DEBUG)
+logger.addHandler(sh)
 
+
+class ThreadRunning(Exception):
+    pass
+
+class InvalidSelector(Exception):
+    pass
+
+class InvalidWord(Exception):
+    pass
 
 def plugin_loaded():
     settings = sublime.load_settings("Preferences.sublime-settings")
@@ -21,6 +32,10 @@ def plugin_loaded():
     ]
     settings.set("auto_complete_triggers", triggers)
     sublime.save_settings("Preferences.sublime-settings")
+
+    s = sublime.load_settings("Pytools.sublime-settings")
+    window = sublime.active_window()
+    s.add_on_change("path", CLIENT_HUB.load_runtime(window))
 
 
 def load_settings(key):
@@ -48,22 +63,34 @@ def get_sysenv():
         return None
 
 
-class ClientHub:
-    _instance = None
+class ClientHub(Client):
+    def __init__(self):
+        super().__init__()
+        self.lock = threading.Lock()
 
-    def __new__(cls):
-        if not ClientHub._instance:
-            ClientHub._instance = Client()
-        return ClientHub._instance
+    def runnable(self, func):
+        with self.lock:
+            def wrapper(*args, **kwargs):
+                return func(*args, **kwargs)
+            return wrapper
 
-    def __getattribute__(self, name):
-        return getattr(self._instance, name)
+    def load_runtime(self, window):
+        python = load_settings("python")
+        env = get_sysenv()
 
-    def __setattr__(self, name):
-        return setattr(self._instance, name)
+        if python == None and env == None:
+            logger.warning("python environment not configured")
+            msg = "Python environment not configured.\nSetup now?"
+            setup = sublime.ok_cancel_dialog(msg, "Yes")
+            if setup:
+                window.run_command("pytools_environment_setup")
+            return
+
+        env["PATH"] = os.pathsep + env['PATH']
+        self.set_python_runtime(python=python, env=env)
 
 
-clientHub = ClientHub()
+CLIENT_HUB = ClientHub()
 
 
 class PytoolsFormatCommand(sublime_plugin.TextCommand):
@@ -73,29 +100,23 @@ class PytoolsFormatCommand(sublime_plugin.TextCommand):
 
         if not view.match_selector(0, "source.python"):
             return
+        
+        if CLIENT_HUB.ready():
+            self.do_formatting(edit)
+        else:
+            CLIENT_HUB.load_runtime(view.window())
+            CLIENT_HUB.runnable(CLIENT_HUB.initialize())
 
-        view.set_status("lsp_process", "🔄 Formatting")
-
-        python = load_settings("python")
-        env = get_sysenv()
-
-        if python == None and env == None:
-            logger.warning("python environment not configured")
-            msg = "Python environment not configured.\nSetup now?"
-            setup = sublime.ok_cancel_dialog(msg, "Yes")
-            if setup:
-                view.run_command("pytools_environment_setup")
-            return
-
-        global clientHub
-        if not clientHub.capabilities:
-            logger.warning("not initialized")
-            env["PATH"] = os.pathsep + env['PATH']
-            clientHub.change_python(python=python, env=env)
-            clientHub.initialize()
-        result = clientHub.formatting(src)
-        formatting.update_edit(view, edit, result)
-        view.erase_status("lsp_process")
+    @CLIENT_HUB.runnable
+    def do_formatting(self, edit):
+        view = self.view
+        src = view.substr(sublime.Region(0, view.size()))
+        try:
+            result = CLIENT_HUB.formatting(src)
+            logger.debug(result)
+            formatting.update_edit(view, edit, result)
+        except Exception:
+            logger.debug("formatting exception", exc_info=True)
 
     def is_visible(self):
         view = self.view
@@ -105,36 +126,32 @@ class PytoolsFormatCommand(sublime_plugin.TextCommand):
 
 
 class Pytools(sublime_plugin.EventListener):
+
     def __init__(self):
+        self.service_loaded = None
         self.completions = None
-        self.lsp_client = None
-        self.lsp_process_count = 0
-        self._old_prefix = ""
-        self._old_location = 0
-        self.cached_completion = {}
-        # self.cached_completion_params = {}
 
-    def preprocess_lsp(self, view):
-        global clientHub
-        python = load_settings("python")
-        env = get_sysenv()
+        self.view = None
 
-        if python == None and env == None:
-            logger.warning("python environment not configured")
-            msg = "Python environment not configured.\nSetup now?"
-            setup = sublime.ok_cancel_dialog(msg, "Yes")
-            if setup:
-                view.run_command("pytools_environment_setup")
-            return
+        self.completion_thread = None
+        self.hover_thread = None
 
-        env["PATH"] = os.pathsep + env['PATH']
-        clientHub.change_python(python=python, env=env)
-        if not clientHub.capabilities:
-            clientHub.initialize()
-        path = os.path.dirname(view.file_name())
-        config = {"jedi": {"project": {"path": path}}}
-        clientHub.workspace_config_change(config)
+    def load_service(self, view):
+        try:
+            CLIENT_HUB.load_runtime(view.window())
+            self.service_loaded = True
+            logger.debug("load_service")
+        except:
+            pass
 
+    def valid_scope(self, view, location):
+        if not view.match_selector(location, "source.python"):
+            raise InvalidSelector
+        if view.match_selector(location, "comment") or view.match_selector(location, "meta.string"):
+            raise InvalidSelector
+        return True
+
+    @CLIENT_HUB.runnable
     def fetch_completions(self, view, prefix, locations):
         cursor = locations[0]
         src = view.substr(sublime.Region(0, cursor))
@@ -147,42 +164,22 @@ class Pytools(sublime_plugin.EventListener):
             word_offset = cursor
 
         row, col = view.rowcol(word_offset)
-        code_token = "%s:%s" % (view.file_name(), word_offset)
-        logger.debug(code_token)
-
-        cached_completion = self.cached_completion.get(code_token)
-        if cached_completion:
-            completions, old_src = cached_completion
-            if src[:word_offset] == old_src:
-                self.completions = completions
-                self._old_prefix = prefix
-                self.open_query_completions(view)
-                # release lock
-                self.lsp_process_count -= 1
-                view.erase_status("lsp_process")
-                return
-            else:
-                logger.debug("code changed")
-                del self.cached_completion[code_token]
-
-        logger.debug("no cached_completion")
-        global clientHub
-        self.preprocess_lsp(view)
-        raw_completion = clientHub.complete(src[:word_offset], row, col)
-        # logger.debug(raw_completion)
-        completions = completion.format_code(raw_completion)
-        logger.debug("fetch_completions")
-        if completions:
-            self.cached_completion[code_token] = (
-                completions, src[:word_offset])
+        if CLIENT_HUB.ready():
+            CLIENT_HUB.set_workspace_config(path=os.path.dirname(view.file_name()))
+            results = CLIENT_HUB.complete(src,row,col)
+            logger.debug(results)
+            completions = completion.format_code(results)
             self.completions = completions
-            self._old_prefix = prefix
-            self._old_location = cursor
-            self.open_query_completions(view)
+            logger.debug(self.completions)
 
-        # release lock
-        self.lsp_process_count -= 1
-        view.erase_status("lsp_process")
+            if self.show_completion(cursor, prefix):
+                self.open_query_completions(view)
+            else:
+                self.completions = None
+        else:
+            if not self.service_loaded:
+                self.load_service(view)
+            CLIENT_HUB.initialize()
 
     def open_query_completions(self, view):
         """Opens (forced) the sublime autocomplete window"""
@@ -193,6 +190,20 @@ class Pytools(sublime_plugin.EventListener):
             "next_completion_if_showing": False,
             "auto_complete_commit_on_tab": True,
         })
+
+    def show_completion(self, pos, prefix):
+        show = False
+        view = self.view
+        _current_pos = view.sel()[0].a
+        _current_prefix = view.substr(view.word(_current_pos))
+        if _current_pos == pos:
+            show = True
+        if _current_prefix.startswith(prefix) and pos > _current_pos:
+            show = True
+        if self.completions is None:
+            show = False
+        logger.debug("show_completion : %s",show)
+        return show
 
     def on_query_completions(self, view, prefix, locations):
         """Sublime autocomplete event handler.
@@ -211,81 +222,106 @@ class Pytools(sublime_plugin.EventListener):
         """
         location = locations[0]
 
-        if not view.match_selector(location, "source.python"):
-            return
-        if view.match_selector(location, "meta.string"):
-            return
-        if view.match_selector(location, "comment"):
-            return
+        def make_completion(cmpl):
+            return (cmpl, sublime.INHIBIT_WORD_COMPLETIONS | sublime.INHIBIT_EXPLICIT_COMPLETIONS)
 
-        empty_completions = ([], sublime.INHIBIT_WORD_COMPLETIONS)
+        results = make_completion([])
 
-        if self.completions:
-            completions = self.completions
-            self.completions = None
+        try:
+            if self.valid_scope(view, location):
+                self.view = view
+                completions = None
 
-            if prefix.startswith(self._old_prefix) or self._old_location == location:
-                return (completions, sublime.INHIBIT_WORD_COMPLETIONS)
-            else:
-                return empty_completions
+                if self.completions is not None:
+                    completions = self.completions
+                    self.completions = None
+                else:
+                    def make_thread():
+                        thread = threading.Thread(target=self.fetch_completions,
+                            args=(view,prefix,locations))
+                        return thread
+                    if self.completion_thread is None:
+                        self.completion_thread = make_thread()                        
+                    else:
+                        if self.completion_thread.is_alive():
+                            raise ThreadRunning
+                        else:
+                            self.completion_thread = make_thread()
+                    self.completion_thread.start()
 
-        if self.lsp_process_count >= 1:
-            return empty_completions
-        self.lsp_process_count += 1
-        view.set_status("lsp_process", "🔄 Completing")
+                completions = [] if completions is None else completions
+                results = make_completion(completions)
+                
+        except InvalidSelector:
+            logger.debug("InvalidSelector")
+            results = None
+        except ThreadRunning:
+            logging.debug("ThreadRunning")
+        except Exception:
+            logger.exception("completion exception")
 
-        thread = threading.Thread(
-            target=self.fetch_completions, args=(view, prefix, locations))
-        thread.start()
-        return empty_completions
+        return results
 
-    def fetch_help(self, view, point):
+    @CLIENT_HUB.runnable
+    def fetch_help(self, view, point):    
         word_region = view.word(point)
-        if point == word_region.b:
-            self.lsp_process_count -= 1
-            view.erase_status("lsp_process")
-            return
-        src = view.substr(sublime.Region(0, word_region.b))
-        line, col = view.rowcol(point)
 
-        global clientHub
-        self.preprocess_lsp(view)
-        raw_help = clientHub.hover(src, line, col)
-        logger.debug(raw_help)
-        help_data = hover.format_code(raw_help)
-        hover.show_popup(view=view, content=help_data, location=point)
-        # release lock
-        self.lsp_process_count -= 1
-        view.erase_status("lsp_process")
+        src = view.substr(sublime.Region(0, word_region.b))
+        row, col = view.rowcol(word_region.b)
+
+        if CLIENT_HUB.ready():
+            CLIENT_HUB.set_workspace_config(path=os.path.dirname(view.file_name()))
+            result = CLIENT_HUB.hover(src,row,col)
+            logger.debug(result)
+            formatted_result = hover.format_code(result)
+            hover.show_popup(view=view, content=formatted_result, location=point)
+        else:
+            if not self.service_loaded:
+                self.load_service(view)
+            CLIENT_HUB.initialize()
 
     def on_hover(self, view, point, hover_zone):
-        if not view.match_selector(point, "source.python"):
-            return
-        if view.match_selector(point, "meta.string"):
-            return
-        if view.match_selector(point, "comment"):
-            return
-        if not str.isidentifier(view.substr(view.word(point))):
-            return
+        try:
+            if self.valid_scope(view, point):
+                if hover_zone == sublime.HOVER_TEXT:
+                    word_region = view.word(point)
+                    if not str.isidentifier(view.substr(word_region)):
+                        raise InvalidWord
 
-        if hover_zone == sublime.HOVER_TEXT:
-            if self.lsp_process_count >= 1:
-                return
-            self.lsp_process_count += 1
-            view.set_status("lsp_process", "🔄 Documentation")
-            thread = threading.Thread(
-                target=self.fetch_help, args=(view, point))
-            thread.start()
-        else:
-            return
+                    def make_thread():
+                        thread = threading.Thread(target=self.fetch_help,
+                            args=(view, point))
+                        return thread
+                    if self.hover_thread is None:
+                        self.hover_thread = make_thread()
+                    else:
+                        if self.hover_thread.is_alive():
+                            raise ThreadRunning
+                        else:
+                            self.hover_thread = make_thread()
+                    self.hover_thread.start()
+
+        except InvalidSelector:
+            logger.debug("InvalidSelector")
+        except InvalidWord:
+            logger.debug("InvalidWord")
+        except ThreadRunning:
+            logger.debug("ThreadRunning")
+        except Exception:
+            logger.exception("hover exception", exc_info=True)
 
 
-class PytoolsShutdownserverCommand(sublime_plugin.TextCommand):
-    def run(self, edit):
+class PytoolsShutdownserverCommand(sublime_plugin.WindowCommand):
+    def run(self):
         thread = threading.Thread(target=self.exit_thread)
         thread.start()
 
+    @CLIENT_HUB.runnable
     def exit_thread(self):
-        global clientHub
-        clientHub.exit()
-        logger.info("server terminated")
+        try:            
+            CLIENT_HUB.exit()
+            logger.info("server terminated")
+        except InvalidSelector:
+            logger.debug("InvalidSelector")
+        except Exception:
+            logger.exception("exit exception", exc_info=True)

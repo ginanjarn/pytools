@@ -2,9 +2,12 @@ import sublime
 from os import path
 import logging
 
-logging.basicConfig(format='%(levelname)s\t%(module)s: %(lineno)d\t%(message)s')
 logger = logging.getLogger(__name__)
 # logger.setLevel(logging.DEBUG)
+sh = logging.StreamHandler()
+sh.setFormatter(logging.Formatter('%(levelname)s\t%(module)s: %(lineno)d\t%(message)s'))
+sh.setLevel(logging.DEBUG)
+logger.addHandler(sh)
 
 
 def goto_definition(view, path_encoded):
@@ -16,12 +19,13 @@ def goto_definition(view, path_encoded):
 
 
 def show_popup(view, content, location):
-    if content:
+    if content is not None:
         view.show_popup(content, sublime.HIDE_ON_MOUSE_MOVE_AWAY | sublime.COOPERATE_WITH_AUTO_COMPLETE, location=location,
-                        max_width=500, on_navigate=lambda path_encoded: goto_definition(view, path_encoded))
+                        max_width=800, on_navigate=lambda path_encoded: goto_definition(view, path_encoded))
 
 
 def format_code(source):
+    contents_value = None
     try:
         if not source:
             return
@@ -31,7 +35,7 @@ def format_code(source):
                 return None
             contents_value = "<div style=\"margin:.5em\">{}</div>".format(
                 contents["value"])
-            return contents_value
-    except Exception as e:
-        logger.error(e)
-        return None
+    except Exception:
+        logger.exception("format_code", exc_info=True)
+    finally:
+        return contents_value

@@ -1,9 +1,12 @@
 import sublime
 import logging
 
-logging.basicConfig(format='%(levelname)s\t%(module)s: %(lineno)d\t%(message)s')
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
+sh = logging.StreamHandler()
+sh.setFormatter(logging.Formatter('%(levelname)s\t%(module)s: %(lineno)d\t%(message)s'))
+sh.setLevel(logging.DEBUG)
+logger.addHandler(sh)
 
 
 def update_edit(view, edit, new_values):
@@ -14,11 +17,12 @@ def update_edit(view, edit, new_values):
         newsrc = applyUpdate(src, new_values)
         view.erase(edit, sublime.Region(0, view.size()))
         view.insert(edit, 0, newsrc)
-    except Exception as e:
-        logger.error(e)
+    except Exception:
+        logger.exception("update_edit", exc_info=True)
 
 
 def applyUpdate(src, update):
+    results = None
     try:
         if not update:
             return
@@ -51,7 +55,7 @@ def applyUpdate(src, update):
                 new_src.append(line)
         results = "\n".join(new_src)
         logger.debug(results)
+    except Exception:
+        logger.exception("applyUpdate", exc_info=True)
+    finally:
         return results
-    except Exception as e:
-        logger.error(e)
-        return
