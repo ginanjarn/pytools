@@ -3,7 +3,7 @@ import logging
 
 
 logger = logging.getLogger("formatting")
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 sh = logging.StreamHandler()
 sh.setFormatter(logging.Formatter(
     '%(levelname)s\t%(module)s: %(lineno)d\t%(message)s'))
@@ -55,14 +55,10 @@ class Completion:
         try:
             c = Script(source=self.src, project=project)
             result = c.complete(self.line, self.character)
-            completion_list = []
             for r in result:
                 completion = {}
                 completion["label"] = r.name_with_symbols
                 completion["kind"] = r.type
-                completion_list.append(completion)
-            logger.debug(completion_list)
+                yield completion
         except Exception:
             raise CompletionError
-
-        return completion_list
