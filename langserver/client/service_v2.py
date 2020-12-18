@@ -112,12 +112,12 @@ class Client:
 
             _, serr = server_proc.communicate()
             if server_proc.returncode != 0:
-                logger.error("server error\n%s", str.strip(serr.decode()))
+                logger.error("server error\n%s", serr.decode().replace(os.linesep, "\n"))
                 raise ServerError
         except OSError:
             logger.debug("OSError")
         except Exception:
-            logger.exception("cannot run_server")
+            logger.exception("cannot run_server", exc_info=True)
             raise ServerError
 
     def __init__(self, host=None, port=None):
