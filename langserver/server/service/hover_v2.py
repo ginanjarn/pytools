@@ -90,7 +90,7 @@ class Hover:
                               1) if data.column is not None else None
 
                     href = "%s:%s:%s" % (module_path, line, column)
-                    header = "%s <a href=%s>%s</a>" % (type_, href, name)
+                    header = "%s <a href=\"%s\">%s</a>" % (type_, href, name)
                     logger.debug(header)
                 return header
 
