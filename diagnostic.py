@@ -1,3 +1,8 @@
+"""Diagnostic
+
+Helper module for lint operation
+"""
+
 import os
 import subprocess
 import re
@@ -15,7 +20,7 @@ logger.addHandler(sh)
 
 class CommandError(Exception):
     """Command error"""
-    pass
+    ...
 
 
 ERROR = 1
@@ -39,8 +44,9 @@ class PylintFormatter:
 
         Yield:
             dict formatted message. keys = ["severity", "code",
-                            "module", "line", "column", "message"]"""
-        
+                            "module", "line", "column", "message"]
+        """
+
         def convert_severity(severity):
             level = {"R": HINT, "C": INFORMATION,
                      "W": WARNING, "E": ERROR, "F": ERROR}
@@ -60,6 +66,8 @@ class PylintFormatter:
 
 
 class Pylint:
+    """Pylint handler"""
+
     def __init__(self, path, env=None):
         if env is None:
             env = os.environ.copy()
@@ -100,8 +108,8 @@ class Pylint:
                 lint_proc = subprocess.Popen(cmd, shell=True,
                                              stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                              stderr=subprocess.PIPE, env=self.env, bufsize=-1)
-        except Exception:
-            raise CommandError
+        except Exception as err:
+            raise CommandError from err
 
         sout, serr = lint_proc.communicate()
         logger.debug("exit = %s", lint_proc.returncode)
@@ -111,14 +119,3 @@ class Pylint:
 
         logger.debug(sout.decode().replace(os.linesep, "\n"))
         return sout.decode()
-
-
-# if __name__ == '__main__':
-#     pl = Pylint("diagnostic.py")
-#     try:
-#         rt = pl.lint(template=PylintFormatter.template)
-#         # logger.debug(rt)
-#         res = PylintFormatter.parse_output(rt)
-#         logger.debug(list(res))
-#     except Exception:
-#         logger.exception("Pylint", exc_info=True)
