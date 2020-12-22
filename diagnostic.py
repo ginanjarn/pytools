@@ -49,8 +49,8 @@ class PylintFormatter:
         def parse_message(msg):
             msg = {
                 "severity": convert_severity(msg[0]),
-                "code": msg[1], "module": msg[2], "line": msg[3],
-                "column": msg[4], "message": msg[5]
+                "code": msg[1], "module": msg[2], "line": int(msg[3]),
+                "column": int(msg[4]), "message": msg[5]
             }
             return msg
 
