@@ -61,12 +61,15 @@ class Hover:
             logger.debug(self.src)
             logger.debug("line = %s, character = %s",
                          self.line, self.character)
-            prebuit_doc = self.build_doc(result[0]) if len(result) > 0 else ""
-            ret = {"contents": {"language": "html", "value": prebuit_doc}}
+            if len(result) > 0:
+                prebuit_doc = self.build_doc(result[0])
+                prebuit_doc = "".join(prebuit_doc)
+            else:            
+                prebuit_doc = ""
         except Exception:
             raise HoverError
 
-        return ret
+        return {"contents": {"language": "html", "value": prebuit_doc}}
 
     def build_doc(self, data):
         result = None
@@ -87,7 +90,7 @@ class Hover:
                               1) if data.column is not None else None
 
                     href = "%s:%s:%s" % (module_path, line, column)
-                    header = "%s <a href=%s>%s</a>" % (type_, href, name)
+                    header = "%s <a href=\"%s\">%s</a>" % (type_, href, name)
                     logger.debug(header)
                 return header
 
@@ -103,10 +106,8 @@ class Hover:
             def split_p(src):
                 return src.split("\n\n")
 
-            def wrap_p(lines):
-                if not isinstance(lines, list):
-                    raise TypeError
-                return ["<p>%s</p>" % (line) for line in lines]
+            def wrap_p(line):
+                return "<p>%s</p>" % (line)
 
             def split_br(src):
                 return src.split("\n")
@@ -116,30 +117,20 @@ class Hover:
                     raise TypeError
                 return "<br>".join(lines)
 
-            def join(lines):
-                if not isinstance(lines, list):
-                    raise TypeError
-                return "".join(lines)
-
             result_body = []
             if type_ == "keyword":
                 logger.debug("this is keyword")
-                result_body.append(get_header())
+                yield get_header()
             else:
-                result_body.append(get_header())
-                body = []
+                yield get_header()
                 doc = docstring()
                 if doc != "":
                     paragraphs = split_p(doc)
                     for par in paragraphs:
                         lines = split_br(par)
                         par_body = join_br(lines)
-                        body.append(par_body)
-                    result_body += wrap_p(body)
-                    
-            logger.debug(result_body)
-            result = "".join(result_body)
+                        yield wrap_p(par_body)
+
         except Exception:
             logger.exception("some wrong", exc_info=True)
-        finally:
-            return result
+            raise HoverError

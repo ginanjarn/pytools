@@ -190,6 +190,7 @@ class Server:
             if self.workspace is not None:
                 project = csv.project(self.workspace.path)
             result = csv.complete(project=project)
+            result = list(result)
             logger.debug(result)
         except Exception:
             logger.exception("CompletionError", exc_info=True)
