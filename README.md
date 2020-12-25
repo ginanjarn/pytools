@@ -1,38 +1,49 @@
-# PYTOOLS (SUBLIME TEXT PYTHON TOOLS)
+# PYTOOLS
+Lightweight python tools for **Sublime Text.**
 
 ## FEATURES
-* Code completion with `jedi`.
-* Format code with `autopep8`.
-* Lint package with `pylint`.
-* **Conda** integration.
+* **Code completion** . 
+* **Hover help**.
+* **PEP8 Format code**.
+* **Lint package**.
+
+## REQUIREMENTS
+* `jedi`
+* `autopep8`
+* `pylint`
 
 ## INSTALL
 Clone `github.com/ginanjarn/pytools` in your sublime text package installation directory.
 >On **SublimeText** menu click ***Preferences>BrowsePackage***.
 
 ## SETUP
->**Python** automatically detected if ***anaconda/miniconda*** installed in `USER` path.
-
 1. Config **python** manually by define:
 ~~~json
 {
 	// Pytools.sublime-settings
-	"python":"python.exe",
-	"env":"path_environment",
+	"python":"python",
+	"path":"python_environment_path",
 }
 ~~~
-2. Use **command palette** (`ctrl+shift+p`) run command `PyTools: Conda Setup`. (*anaconda/miniconda required*)
+2. Use **command palette** (`ctrl+shift+p`) run command `PyTools: Environment Setup` **>**  Select **conda** or **venv**  **>** input the *environment path*.
+>**Conda** automatically detect default anaconda installation in home directory. Input path if you install in custom path.
 
-## CONDA
-* **Setup** conda environment in **command palette** with  `PyTools: Conda Setup`.
-* **Change** conda environment in **command palette** with `PyTools: Conda Environment`.
->Settings for `python` and `env` will changed to current activated environment.
+## COMMAND
+|No|Command|Function|
+|--|-------|--------|
+|1|`Format Code`|auto format comply pep8 specification|
+|2|`Lint`|show code diagnostic such: error, warning or notice|
+|3|`Environment Setup`|Setup conda or venv environment for current project|
+|4|`Change Environment`|Change working environment|
+|5|`Shutdown Server`|Shutdown server tools|
+|6|`Open Terminal`|Open teminal in current working directory|
+>Sublime unable to shutdown server tools on exit. You should shutdown manually or let server running on background.
+
+## LINT
+Hover on **marked line number** to show diagnostic  **message**.
+
 
 ## TROUBLESHOOT
-* Make sure if python is defined in settings.
-* Anaconda/Miniconda required for conda environment.
-* Required package:
-	* Code completion with `jedi`.
-	* Code formatting with `autopep8`.
-	* Package lint with `pylint`.
-* If code completion not working try to reset server by `PyTools: Reset Jedi` in command palette.
+* Make sure if [python environment](#setup) is defined in settings.
+* Make sure if [required package](#requirements) installed.
+* Try shutdown server with `Pytools: Shutdown Server` command.
