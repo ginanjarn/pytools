@@ -310,6 +310,10 @@ class Pytools(sublime_plugin.EventListener):
         except Exception:
             logger.exception("hover exception", exc_info=True)
 
+    def on_post_window_command(self, window, command_name, args):
+        if command_name == "exit":
+            window.run_command("pytools_shutdownserver")
+
 
 class PytoolsShutdownserverCommand(sublime_plugin.WindowCommand):
     def run(self):
