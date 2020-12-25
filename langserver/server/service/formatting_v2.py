@@ -14,9 +14,12 @@ FORMATTING_CAPABLE = True
 
 
 try:
-    import autopep8
+    # import autopep8
     import difflib
     import re
+    import os
+    import black
+    import subprocess
     from . import serializer
 except ModuleNotFoundError:
     FORMATTING_CAPABLE = False
@@ -28,6 +31,7 @@ def capability():
 
 class FormattingError(Exception):
     """Formatting Error"""
+    ...
 
 
 class Formatting:
@@ -44,9 +48,32 @@ class Formatting:
                 self.src = src
             # args = autopep8.parse_args(["--diff","-"], apply_config=False)
             # fixed_code = autopep8.fix_code(self.src, args, encoding=None)
-            fixed_code = autopep8.fix_code(self.src)
-            result = self.extract_updated(self.src, fixed_code)
-            logger.debug(result)
+            # fixed_code = autopep8.fix_code(self.src)
+            # result = self.extract_updated(self.src, fixed_code)
+            # logger.debug(result)
+
+            black_cmd = ["python","-m","black","-"]
+
+            env = os.environ.copy()
+
+            if os.name == "nt":
+                # linux subprocess module does not have STARTUPINFO
+                # so only use it if on Windows
+                si = subprocess.STARTUPINFO()
+                si.dwFlags |= subprocess.SW_HIDE | subprocess.STARTF_USESHOWWINDOW
+                server_proc = subprocess.Popen(black_cmd, stdin=subprocess.PIPE,
+                                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True,
+                                               env=env, startupinfo=si)
+            else:
+                server_proc = subprocess.Popen(
+                    black_cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE, shell=True, env=env)
+
+            sout, serr = server_proc.communicate(self.src.encode())
+            if server_proc.returncode != 0:
+                raise Exception(serr.decode())
+            result = self.extract_updated(self.src, sout.decode())
+
         except Exception:
             raise FormattingError
 
