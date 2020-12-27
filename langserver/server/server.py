@@ -250,6 +250,7 @@ class Server:
         try:
             logger.debug("src +++++ \n%s", fsv.src)
             result = fsv.format_code()
+            result = list(result)
             logger.debug(result)
         except Exception:
             logger.exception("InternalError", exc_info=True)
