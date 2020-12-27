@@ -7,8 +7,7 @@ import logging
 logger = logging.getLogger("main")
 # logger.setLevel(logging.DEBUG)
 sh = logging.StreamHandler()
-sh.setFormatter(logging.Formatter(
-    '%(levelname)s\t%(module)s: %(lineno)d\t%(message)s'))
+sh.setFormatter(logging.Formatter("%(levelname)s\t%(module)s: %(lineno)d\t%(message)s"))
 sh.setLevel(logging.DEBUG)
 logger.addHandler(sh)
 
@@ -16,22 +15,25 @@ logger.addHandler(sh)
 def encode(data: str) -> bytes:
     separator = b"\r\n\r\n"
     header = "Content-Length: %s" % (len(data))
-    return header.encode("ascii")+separator+data.encode("utf-8")
+    return header.encode("ascii") + separator + data.encode("utf-8")
 
 
 class ContentInvalid(Exception):
     """Unable resolve content"""
-    pass
+
+    ...
 
 
 class ContentIncomplete(Exception):
     """Content length less than defined length"""
-    pass
+
+    ...
 
 
 class ContentOverflow(Exception):
     """Content length greater than defined length"""
-    pass
+
+    ...
 
 
 def _get_head_and_body(data: bytes) -> (str, str):
@@ -61,7 +63,8 @@ def decode(data: bytes) -> str:
 
 class ParseError(Exception):
     """Unable to parse"""
-    pass
+
+    ...
 
 
 class Message:
@@ -79,7 +82,7 @@ class Message:
             message = json.loads(src)
         except Exception:
             logger.exception("error parse message")
-            raise ParseError
+            raise ParseError from None
         return cls(message)
 
     @property
@@ -89,19 +92,16 @@ class Message:
     @message.setter
     def message(self, msg_data: dict):
         if not isinstance(msg_data, dict):
-            raise ValueError(
-                "required input %s found '%s'" % (type({}), type(data)))
+            raise ValueError("required input %s found '%s'" % (type({}), type(msg_data)))
         self._message.update(msg_data)
 
 
 class RequestMessage(Message):
-    def __init__(self, message=None):
-        super().__init__(message)
 
     @classmethod
-    def create(cls, id, method, params=None, **kwargs):
+    def create(cls, msg_id, method, params=None, **kwargs):
         message = {}
-        message.update({"id": id, "method": method, "params": params})
+        message.update({"id": msg_id, "method": method, "params": params})
         message.update(kwargs)
         return cls(message)
 
@@ -119,12 +119,10 @@ class RequestMessage(Message):
 
 
 class ResponseMessage(Message):
-    def __init__(self, message=None):
-        super().__init__(message)
 
     @classmethod
-    def create(cls, id, results=None, error=None, **kwargs):
-        message = {"id": id, "results": results, "error": error}
+    def create(cls, msg_id, results=None, error=None, **kwargs):
+        message = {"id": msg_id, "results": results, "error": error}
         message.update(kwargs)
         return cls(message)
 
@@ -142,7 +140,7 @@ class ResponseMessage(Message):
 
 
 class ResponseError:
-    def __init__(self, code, message="", *args, **kwargs):
+    def __init__(self, code, *args, message="", **kwargs):
         self._error = {"code": code, "message": message}
         if len(args) > 0:
             for arg in args:
@@ -165,8 +163,7 @@ class ResponseError:
     @error.setter
     def error(self, err_data: dict):
         if not isinstance(err_data, dict):
-            raise ValueError(
-                "required input <class 'dict'> found '%s'" % type(data))
+            raise ValueError("required input <class 'dict'> found '%s'" % type(err_data))
         self._error.update(err_data)
 
     @property
