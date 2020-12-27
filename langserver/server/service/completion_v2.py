@@ -5,8 +5,7 @@ import logging
 logger = logging.getLogger("formatting")
 # logger.setLevel(logging.DEBUG)
 sh = logging.StreamHandler()
-sh.setFormatter(logging.Formatter(
-    '%(levelname)s\t%(module)s: %(lineno)d\t%(message)s'))
+sh.setFormatter(logging.Formatter("%(levelname)s\t%(module)s: %(lineno)d\t%(message)s"))
 sh.setLevel(logging.DEBUG)
 logger.addHandler(sh)
 
@@ -27,7 +26,8 @@ def capability():
 
 class CompletionError(Exception):
     """Completion Error"""
-    pass
+
+    ...
 
 
 class Completion:
@@ -38,7 +38,8 @@ class Completion:
             self.line = cparam.line
             self.character = cparam.character
         except serializer.DeserializeError:
-            raise serializer.DeserializeError
+            logger.exception("deserialize error", exc_info=True)
+            raise serializer.DeserializeError from None
 
     def project(self, path):
         p = Project(path=path)
@@ -50,7 +51,7 @@ class Completion:
         if line is not None:
             self.line = line
         if character is not None:
-            self.character
+            self.character = character
 
         try:
             c = Script(source=self.src, project=project)
@@ -61,4 +62,5 @@ class Completion:
                 completion["kind"] = r.type
                 yield completion
         except Exception:
-            raise CompletionError
+            logger.exception("fetch completion error", exc_info=True)
+            raise CompletionError from None
