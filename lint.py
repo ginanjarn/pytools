@@ -10,7 +10,7 @@ from . import diagnostic
 
 
 logger = logging.getLogger(__name__)
-# logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.DEBUG)
 sh = logging.StreamHandler()
 sh.setFormatter(logging.Formatter("%(levelname)s\t%(module)s: %(lineno)d\t%(message)s"))
 sh.setLevel(logging.DEBUG)
@@ -51,10 +51,21 @@ class Marker:
     mark_key = "marker%s%s"
 
     @staticmethod
-    def get_flag(severity):
+    def get_scope(severity):
+        """get scope follow severity"""
+        scope = {
+            ERROR: "Invalid",
+            WARNING: "Invalid",
+            INFORMATION: "Comment",
+            HINT: "Comment",
+        }
+        return scope[severity]
+
+    @staticmethod
+    def get_flags(severity):
         """get flag follow severity"""
 
-        flag = {
+        flags = {
             ERROR: sublime.DRAW_NO_OUTLINE,
             WARNING: sublime.DRAW_NO_FILL
             | sublime.DRAW_NO_OUTLINE
@@ -68,7 +79,7 @@ class Marker:
             | sublime.DRAW_SQUIGGLY_UNDERLINE
             | sublime.HIDE_ON_MINIMAP,
         }
-        return flag[severity]
+        return flags[severity]
 
     @staticmethod
     def get_icon(severity):
@@ -77,141 +88,97 @@ class Marker:
         icon = {ERROR: "circle", WARNING: "dot", INFORMATION: "dot", HINT: "bookmark"}
         return icon[severity]
 
-    def __init__(self):
-        self.marks = {}
-
-    def is_prioritized(self, file_name, line, severity) -> bool:
-        """check if more prioritized than cached"""
-
-        cached = self.marks.get(Marker.mark_key % (file_name, line))
-        prioritized = False
-        if cached is not None:
-            prioritized = cached["severity"] > severity
-        else:
-            prioritized = True
-        return prioritized
-
-    def add_mark(self, file_name, line, column, severity, message, **kwargs):
-        """add mark
-
-        Args:
-            file_name(str)
-            line(int): zero based indexed line
-            column(int): zero based indexed column
-            severity: severity level
-            **kwargs: additional mapped data
-        """
-
-        line -= 1  # sublime use zero(0) based line index
-        if self.is_prioritized(file_name, line, severity):
-            key = Marker.mark_key % (file_name, line)
-            self.marks[key] = {
-                "file_name": file_name,
-                "line": line,
-                "column": column,
-                "severity": severity,
-                "message": message,
-            }
-            self.marks[key].update(kwargs)
-
-    def add_regions(self, view, scope, regions, severity):
-        key = "%s%s" % (view.file_name(), severity)
+    @staticmethod
+    def add_regions(view, key, regions, scope, icon, flags):
         view.add_regions(
             key=key,
             regions=regions,
             scope=scope,
-            icon=Marker.get_icon(severity),
-            flags=Marker.get_flag(severity),
+            icon=icon,
+            flags=flags,
         )
 
-    def mark_error(self, view, regions):
-        self.add_regions(view, "invalid", regions, ERROR)
+    def __init__(self):
+        self.marks = {}  # {view_id: {line: {"regions":None,"diagnostic message":""}}}
 
-    def mark_warning(self, view, regions):
-        self.add_regions(view, "invalid", regions, WARNING)
+    @staticmethod
+    def prioritized(now, cached):
+        return True if now < cached else False
 
-    def mark_information(self, view, regions):
-        self.add_regions(view, "comment", regions, INFORMATION)
+    def set_marker(self, view, severity, line, column, message, message_id):
+        view_id = view.id()
+        region = view.word(view.text_point(line, column))
+        message = "%s: %s" % (message_id, message)
 
-    def mark_hint(self, view, regions):
-        self.add_regions(view, "comment", regions, HINT)
+        if self.marks.get(view_id) is None:
+            self.marks[view_id] = {}
 
-    def get_region(self, view, line, column):
-        return view.line(view.text_point(line, column))
+        try:
+            cached = self.marks[view_id][line]["severity"]
+        except KeyError:
+            cached = 4
+
+        if Marker.prioritized(severity, cached):
+            self.marks[view_id][line] = {
+                "region": region,
+                "message": message,
+                "severity": severity,
+            }
+            # logger.debug(self.marks[view_id])
 
     def apply(self, view):
-        err_regs, warn_regs, info_regs, hint_regs = [], [], [], []
-
-        def match(marks, file_name, severity):
-            return (marks["file_name"] == file_name) and (marks["severity"] == severity)
-
-        file_name = view.file_name()
-        messages = filter(
-            lambda mark: match(mark, file_name, ERROR), self.marks.values()
+        logger.debug(self.marks)
+        view_id = view.id()
+        marks_err = list(
+            filter(lambda mark: mark["severity"] == ERROR, self.marks[view_id].values())
         )
-        err_regs = [
-            self.get_region(view, msg["line"], msg["column"]) for msg in messages
-        ]
-        self.mark_error(view, err_regs)
-
-        messages = filter(
-            lambda mark: match(mark, file_name, WARNING), self.marks.values()
+        marks_warn = list(
+            filter(lambda mark: mark["severity"] == WARNING, self.marks[view_id].values())
         )
-        warn_regs = [
-            self.get_region(view, msg["line"], msg["column"]) for msg in messages
-        ]
-        self.mark_warning(view, warn_regs)
-
-        messages = filter(
-            lambda mark: match(mark, file_name, INFORMATION), self.marks.values()
+        marks_info = list(
+            filter(lambda mark: mark["severity"] == INFORMATION, self.marks[view_id].values())
         )
-        info_regs = [
-            self.get_region(view, msg["line"], msg["column"]) for msg in messages
-        ]
-        self.mark_information(view, info_regs)
-
-        messages = filter(
-            lambda mark: match(mark, file_name, HINT), self.marks.values()
+        marks_hint = list(
+            filter(lambda mark: mark["severity"] == HINT, self.marks[view_id].values())
         )
-        hint_regs = [
-            self.get_region(view, msg["line"], msg["column"]) for msg in messages
-        ]
-        self.mark_hint(view, hint_regs)
+        # logger.debug(marks_info)
+        err_regions = [mark["region"] for mark in marks_err]
+        warn_regions = [mark["region"] for mark in marks_warn]
+        info_regions = [mark["region"] for mark in marks_info]
+        hint_regions = [mark["region"] for mark in marks_hint]
 
-    def get_message(self, file_name, line):
-        key = Marker.mark_key % (file_name, line)
-        # logger.debug(key)
-        mark = self.marks.get(key)
-        message = None
-        if mark is not None:
-            message = "%s: %s" % (mark["msg_code"], mark["message"])
-        # logger.debug(message)
-        return message
+        region_map = {
+            ERROR: err_regions,
+            WARNING: warn_regions,
+            INFORMATION: info_regions,
+            HINT: hint_regions,
+        }
 
-    def clear(self, view, severity="all"):
+        for severity in region_map:
+            scope = Marker.get_scope(severity)
+            icon = Marker.get_icon(severity)
+            flags = Marker.get_flags(severity)
+            key = Marker.mark_key % (view.file_name(), severity)
+            regions = region_map[severity]
 
-        file_name = view.file_name()
-        severity = (
-            [ERROR, WARNING, INFORMATION, HINT] if severity == "all" else severity
-        )
+            Marker.add_regions(view, key, regions, scope, icon, flags)
 
-        def make_key(svt):
-            return "%s%s" % (file_name, svt)
+    def clear(self, view):
+        for severity in (ERROR,WARNING,INFORMATION,HINT,):
+            key = Marker.mark_key % (view.file_name(), severity)
+            view.erase_region(key)
 
-        keys = (make_key(svt) for svt in severity)
+        del self.marks[view.id()]
 
-        for key in keys:
-            view.erase_regions(key)
-
-        def match(value, file_name):
-            return value["file_name"] == file_name
-
-        key_to_remove = [
-            key for key, value in self.marks.items() if match(value, file_name)
-        ]
-
-        for key in key_to_remove:
-            del self.marks[key]
+    def get_message(self, view, line):
+        try:
+            region = view.line(line)
+            marks = list(
+                filter(lambda mark: region.contains(mark["region"].a), self.marks[view.id()].values())
+            )
+            return marks[0]["message"] if marks != [] else None
+        except KeyError:
+            return None
 
 
 def plugin_loaded():
@@ -236,14 +203,12 @@ class PytoolsLintCommand(sublime_plugin.TextCommand):
         formatted_messages = diagnostic.PylintFormatter.parse_output(result_msg)
 
         for msg in formatted_messages:
-            MARKER.add_mark(
-                file_name,
-                msg["line"],
-                msg["column"],
-                msg["severity"],
-                msg["message"],
-                msg_code=msg["code"],
-            )
+            severity = msg["severity"]
+            line = msg["line"] - 1
+            column = msg["column"]
+            message = msg["message"]
+            message_code = msg["code"]
+            MARKER.set_marker(view, severity, line, column, message, message_code)
 
         MARKER.apply(view)
 
@@ -256,22 +221,23 @@ class Linter(sublime_plugin.EventListener):
     def get_message(self, view, point):
         line, _ = view.rowcol(point)
         file_name = view.file_name()
-        msg = MARKER.get_message(file_name, line)
+        msg = MARKER.get_message(view, line)
         # logger.debug(msg)
-        if msg is not None:
-            msg = html.escape(msg, quote=False)
-            content = "%s" % (msg)
-            self.show_popup(view, content, point)
+#         if msg is not None:
+#             msg = html.escape(msg, quote=False)
+#             content = "%s" % (msg)
+#             self.show_popup(view, content, point)
 
-    def show_popup(self, view, content, location):
-        if content is not None:
-            view.show_popup(
-                content,
-                sublime.HIDE_ON_MOUSE_MOVE_AWAY,
-                location=location,
-                max_width=900,
-                on_navigate=None,
-            )
+#     def show_popup(self, view, content, location):
+#         if content is not None:
+#             view.show_popup(
+#                 content,
+#                 sublime.HIDE_ON_MOUSE_MOVE_AWAY,
+#                 location=location,
+#                 max_width=900,
+#                 on_navigate=None,
+#             )
 
-    def on_post_save_async(self, view):
-        MARKER.clear(view)
+#     def on_post_save_async(self, view):
+#         MARKER.clear(view)
+
