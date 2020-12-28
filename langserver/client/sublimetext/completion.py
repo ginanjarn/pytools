@@ -10,13 +10,11 @@ logger.addHandler(sh)
 
 def format_code(data: list) -> any:
     try:
-        if not data:
-            return None
-        parse = [
-            ("{}\t{}".format(cmpl["label"], cmpl["kind"]), cmpl["label"])
-            for cmpl in data
+        parsed = [
+            ("%s\t%s" % (completion["label"], completion["kind"]), completion["label"])
+            for completion in data
         ]
-        return parse
-    except Exception:
-        logger.exception("format_code", exc_info=True)
-        return
+    except (KeyError, TypeError):
+        parsed = None
+    logger.debug(parsed)
+    return parsed
