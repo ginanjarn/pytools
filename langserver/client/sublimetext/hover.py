@@ -10,6 +10,11 @@ sh.setLevel(logging.DEBUG)
 logger.addHandler(sh)
 
 
+class ContentEmpty(Exception):
+    """Content empty"""
+
+    ...
+
 def goto_definition(view, path_encoded):
     if path_encoded.startswith(":"):
         module_path = path.abspath(view.file_name()) + path_encoded
@@ -19,7 +24,7 @@ def goto_definition(view, path_encoded):
 
 
 def show_popup(view, content, location):
-    if content is not None:
+    try:
         view.show_popup(
             content,
             sublime.HIDE_ON_MOUSE_MOVE_AWAY | sublime.COOPERATE_WITH_AUTO_COMPLETE,
@@ -27,21 +32,36 @@ def show_popup(view, content, location):
             max_width=800,
             on_navigate=lambda path_encoded: goto_definition(view, path_encoded),
         )
+    except Exception:
+        logger.exception("error show popup", exc_info=True)
+        raise ValueError("content invalid") from None
 
 
 def format_code(source):
-    contents_value = None
     try:
-        if not source:
-            return
-        contents = source["contents"]
-        if contents["language"] == "html":
-            if contents["value"] is None or contents["value"] == "":
-                return None
-            contents_value = '<div style="margin:.5em">{}</div>'.format(
-                contents["value"]
-            )
-    except Exception:
+        if source["contents"]["language"] == "html":
+            content = source["contents"]["value"]
+
+        if content == "":
+            raise ContentEmpty
+
+        def wrap(src):
+            return '<div style="padding:.5em">%s</div>' % src
+
+        logger.debug(content)
+        contents_value = wrap(content)
+    except KeyError:
         logger.exception("format_code", exc_info=True)
-    
+        raise ValueError("unable to format code") from None
     return contents_value
+
+
+def show_help(view, content, location):
+    try:
+        formatted = format_code(content)
+        logger.debug(formatted)
+        show_popup(view, formatted, location)
+    except ContentEmpty:
+        pass
+    except ValueError:
+        logger.exception("error show help", exc_info=True)
