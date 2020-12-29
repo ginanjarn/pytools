@@ -36,6 +36,7 @@ HINT = 4
 
 
 MARKER = None
+LOADED = False
 
 
 class Marker:
@@ -98,12 +99,12 @@ class Marker:
             flags=flags,
         )
 
-    def __init__(self):
-        self.marks = {}  # {view_id: {line: {"regions":None,"diagnostic message":""}}}
-
     @staticmethod
     def prioritized(now, cached):
-        return True if now < cached else False
+        return True if now < cached else False      
+
+    def __init__(self):
+        self.marks = {}  # {view_id: {line: {"regions":None,"diagnostic message":""}}}
 
     def set_marker(self, view, severity, line, column, message, message_id):
         view_id = view.id()
@@ -129,6 +130,7 @@ class Marker:
     def apply(self, view):
         logger.debug(self.marks)
         view_id = view.id()
+        logger.debug(view_id)
         marks_err = list(
             filter(lambda mark: mark["severity"] == ERROR, self.marks[view_id].values())
         )
@@ -164,32 +166,43 @@ class Marker:
             Marker.add_regions(view, key, regions, scope, icon, flags)
 
     def clear(self, view):
-        for severity in (ERROR,WARNING,INFORMATION,HINT,):
-            key = Marker.mark_key % (view.file_name(), severity)
-            view.erase_region(key)
-
-        del self.marks[view.id()]
+        try:
+            for severity in (ERROR,WARNING,INFORMATION,HINT,):
+                key = Marker.mark_key % (view.file_name(), severity)
+                view.erase_regions(key)
+    
+            del self.marks[view.id()]
+        except KeyError:
+            pass
 
     def get_message(self, view, line):
         try:
-            region = view.line(line)
+            logger.debug(line)
+            region = view.line(view.text_point(line, 0))
+            logger.debug(self.marks)
+            if self.marks == {}:
+                raise ValueError("empty")
+            logger.debug(region)
             marks = list(
                 filter(lambda mark: region.contains(mark["region"].a), self.marks[view.id()].values())
             )
+            logger.debug(marks)
             return marks[0]["message"] if marks != [] else None
-        except KeyError:
+        except (KeyError, ValueError):
             return None
 
 
 def plugin_loaded():
     global MARKER
+    global LOADED
     MARKER = Marker()
-
+    LOADED = True
 
 class PytoolsLintCommand(sublime_plugin.TextCommand):
     def run(self, edit):
-        thread = threading.Thread(target=self.lint)
-        thread.start()
+        if LOADED:
+            thread = threading.Thread(target=self.lint)
+            thread.start()
 
     def lint(self):
         view = self.view
@@ -212,7 +225,6 @@ class PytoolsLintCommand(sublime_plugin.TextCommand):
 
         MARKER.apply(view)
 
-
 class Linter(sublime_plugin.EventListener):
     def on_hover(self, view, point, hover_zone):
         if hover_zone == sublime.HOVER_GUTTER:
@@ -222,22 +234,22 @@ class Linter(sublime_plugin.EventListener):
         line, _ = view.rowcol(point)
         file_name = view.file_name()
         msg = MARKER.get_message(view, line)
-        # logger.debug(msg)
-#         if msg is not None:
-#             msg = html.escape(msg, quote=False)
-#             content = "%s" % (msg)
-#             self.show_popup(view, content, point)
+        logger.debug(msg)
+        if msg is not None:
+            msg = html.escape(msg, quote=False)
+            content = "%s" % (msg)
+            self.show_popup(view, content, point)
 
-#     def show_popup(self, view, content, location):
-#         if content is not None:
-#             view.show_popup(
-#                 content,
-#                 sublime.HIDE_ON_MOUSE_MOVE_AWAY,
-#                 location=location,
-#                 max_width=900,
-#                 on_navigate=None,
-#             )
+    def show_popup(self, view, content, location):
+        if content is not None:
+            view.show_popup(
+                content,
+                sublime.HIDE_ON_MOUSE_MOVE_AWAY,
+                location=location,
+                max_width=900,
+                on_navigate=None,
+            )
 
-#     def on_post_save_async(self, view):
-#         MARKER.clear(view)
+    def on_post_save_async(self, view):
+        MARKER.clear(view)
 
