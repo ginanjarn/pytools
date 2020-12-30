@@ -10,7 +10,7 @@ from . import diagnostic
 
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+# logger.setLevel(logging.DEBUG)
 sh = logging.StreamHandler()
 sh.setFormatter(logging.Formatter("%(levelname)s\t%(module)s: %(lineno)d\t%(message)s"))
 sh.setLevel(logging.DEBUG)
@@ -92,16 +92,12 @@ class Marker:
     @staticmethod
     def add_regions(view, key, regions, scope, icon, flags):
         view.add_regions(
-            key=key,
-            regions=regions,
-            scope=scope,
-            icon=icon,
-            flags=flags,
+            key=key, regions=regions, scope=scope, icon=icon, flags=flags,
         )
 
     @staticmethod
     def prioritized(now, cached):
-        return True if now < cached else False      
+        return True if now < cached else False
 
     def __init__(self):
         self.marks = {}  # {view_id: {line: {"regions":None,"diagnostic message":""}}}
@@ -135,10 +131,15 @@ class Marker:
             filter(lambda mark: mark["severity"] == ERROR, self.marks[view_id].values())
         )
         marks_warn = list(
-            filter(lambda mark: mark["severity"] == WARNING, self.marks[view_id].values())
+            filter(
+                lambda mark: mark["severity"] == WARNING, self.marks[view_id].values()
+            )
         )
         marks_info = list(
-            filter(lambda mark: mark["severity"] == INFORMATION, self.marks[view_id].values())
+            filter(
+                lambda mark: mark["severity"] == INFORMATION,
+                self.marks[view_id].values(),
+            )
         )
         marks_hint = list(
             filter(lambda mark: mark["severity"] == HINT, self.marks[view_id].values())
@@ -167,10 +168,15 @@ class Marker:
 
     def clear(self, view):
         try:
-            for severity in (ERROR,WARNING,INFORMATION,HINT,):
+            for severity in (
+                ERROR,
+                WARNING,
+                INFORMATION,
+                HINT,
+            ):
                 key = Marker.mark_key % (view.file_name(), severity)
                 view.erase_regions(key)
-    
+
             del self.marks[view.id()]
         except KeyError:
             pass
@@ -184,7 +190,10 @@ class Marker:
                 raise ValueError("empty")
             logger.debug(region)
             marks = list(
-                filter(lambda mark: region.contains(mark["region"].a), self.marks[view.id()].values())
+                filter(
+                    lambda mark: region.contains(mark["region"].a),
+                    self.marks[view.id()].values(),
+                )
             )
             logger.debug(marks)
             return marks[0]["message"] if marks != [] else None
@@ -197,6 +206,7 @@ def plugin_loaded():
     global LOADED
     MARKER = Marker()
     LOADED = True
+
 
 class PytoolsLintCommand(sublime_plugin.TextCommand):
     def run(self, edit):
@@ -225,6 +235,7 @@ class PytoolsLintCommand(sublime_plugin.TextCommand):
 
         MARKER.apply(view)
 
+
 class Linter(sublime_plugin.EventListener):
     def on_hover(self, view, point, hover_zone):
         if hover_zone == sublime.HOVER_GUTTER:
@@ -252,4 +263,3 @@ class Linter(sublime_plugin.EventListener):
 
     def on_post_save_async(self, view):
         MARKER.clear(view)
-
