@@ -4,7 +4,7 @@ import logging
 logger = logging.getLogger(__name__)
 # logger.setLevel(logging.DEBUG)
 sh = logging.StreamHandler()
-sh.setFormatter(logging.Formatter('%(levelname)s\t%(module)s: %(lineno)d\t%(message)s'))
+sh.setFormatter(logging.Formatter("%(levelname)s\t%(module)s: %(lineno)d\t%(message)s"))
 sh.setLevel(logging.DEBUG)
 logger.addHandler(sh)
 
@@ -40,15 +40,18 @@ def applyUpdate(src, update):
             if update_i >= len_update:
                 pass_insert = False
             else:
-                if line_i == update[update_i]["range"]['start']["line"]:
+                if line_i == update[update_i]["range"]["start"]["line"]:
                     pass_insert = True
                     new_src.append(update[update_i]["newText"])
                     continue
-                elif line_i == update[update_i]["range"]['end']["line"]:
+                elif line_i == update[update_i]["range"]["end"]["line"]:
                     pass_insert = False
                     update_i += 1
                     continue
-                elif update[update_i]["range"]['start']["line"] == update[update_i]["range"]['end']["line"]:
+                elif (
+                    update[update_i]["range"]["start"]["line"]
+                    == update[update_i]["range"]["end"]["line"]
+                ):
                     pass_insert = False
                     update_i += 1
             if not pass_insert:

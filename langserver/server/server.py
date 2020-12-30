@@ -1,7 +1,6 @@
 import socket
-import rpc
 import logging
-import json
+import rpc
 import service.completion_v2 as cpv2
 import service.hover_v2 as hvv2
 import service.formatting_v2 as fmv2
@@ -11,8 +10,7 @@ import service.serializer as serializer
 logger = logging.getLogger("main")
 # logger.setLevel(logging.DEBUG)
 sh = logging.StreamHandler()
-sh.setFormatter(logging.Formatter(
-    '%(levelname)s\t%(module)s: %(lineno)d\t%(message)s'))
+sh.setFormatter(logging.Formatter("%(levelname)s\t%(module)s: %(lineno)d\t%(message)s"))
 sh.setLevel(logging.DEBUG)
 logger.addHandler(sh)
 
@@ -78,7 +76,7 @@ class Server:
             s.listen()
             conn, addr = s.accept()
             with conn:
-                print('Connected by', addr)
+                print("Connected by", addr)
                 data = b""
                 content = ""
                 while True:
@@ -178,14 +176,18 @@ class Server:
             csv = cpv2.Completion(params)
         except serializer.DeserializeError:
             logger.exception("InvalidParams", exc_info=True)
-            raise InvalidParams
+            raise InvalidParams from None
         except Exception:
             logger.exception("InternalError", exc_info=True)
-            raise InternalError
+            raise InternalError from None
 
         try:
-            logger.debug("line: %s\ncharacter: %s\nsrc +++++ \n%s",
-                         csv.line, csv.character, csv.src)
+            logger.debug(
+                "line: %s\ncharacter: %s\nsrc +++++ \n%s",
+                csv.line,
+                csv.character,
+                csv.src,
+            )
             project = None
             if self.workspace is not None:
                 project = csv.project(self.workspace.path)
@@ -194,7 +196,7 @@ class Server:
             logger.debug(result)
         except Exception:
             logger.exception("CompletionError", exc_info=True)
-            raise InternalError
+            raise InternalError from None
 
         return result
 
@@ -203,14 +205,18 @@ class Server:
             hsv = hvv2.Hover(params)
         except serializer.DeserializeError:
             logger.exception("InvalidParams", exc_info=True)
-            raise InvalidParams
+            raise InvalidParams from None
         except Exception:
             logger.exception("InternalError", exc_info=True)
-            raise InternalError
+            raise InternalError from None
 
         try:
-            logger.debug("line: %s\ncharacter: %s\nsrc +++++ \n%s",
-                         hsv.line, hsv.character, hsv.src)
+            logger.debug(
+                "line: %s\ncharacter: %s\nsrc +++++ \n%s",
+                hsv.line,
+                hsv.character,
+                hsv.src,
+            )
             project = None
             if self.workspace is not None:
                 project = hsv.project(self.workspace.path)
@@ -218,7 +224,7 @@ class Server:
             logger.debug(result)
         except Exception:
             logger.exception("InternalError", exc_info=True)
-            raise InternalError
+            raise InternalError from None
 
         return result
 
@@ -228,10 +234,10 @@ class Server:
             workspace = serializer.Workspace.deserialize(params)
         except serializer.DeserializeError:
             logger.exception("InvalidParams", exc_info=True)
-            raise InvalidParams
+            raise InvalidParams from None
         except Exception:
             logger.exception("invalid_params", exc_info=True)
-            raise InternalError
+            raise InternalError from None
 
         self.workspace = workspace
         logger.debug(self.workspace.path)
@@ -242,18 +248,19 @@ class Server:
             fsv = fmv2.Formatting(param)
         except serializer.DeserializeError:
             logger.exception("InvalidParams", exc_info=True)
-            raise InvalidParams
+            raise InvalidParams from None
         except Exception:
             logger.exception("InternalError", exc_info=True)
-            raise InternalError
+            raise InternalError from None
 
         try:
             logger.debug("src +++++ \n%s", fsv.src)
             result = fsv.format_code()
+            result = list(result)
             logger.debug(result)
         except Exception:
             logger.exception("InternalError", exc_info=True)
-            raise InternalError
+            raise InternalError from None
 
         return result
 
@@ -269,12 +276,11 @@ def main():
     svr.set_command("initialize", svr.initialize)
     svr.set_command("textDocument/completion", svr.complete)
     svr.set_command("textDocument/hover", svr.hover)
-    svr.set_command("workspace/didChangeConfiguration",
-                    svr.change_workspace_config)
+    svr.set_command("workspace/didChangeConfiguration", svr.change_workspace_config)
     svr.set_command("textDocument/formatting", svr.formatting)
 
     svr.loop()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

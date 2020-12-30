@@ -273,8 +273,7 @@ class Pytools(sublime_plugin.EventListener):
             CLIENT_HUB.set_workspace_config(path=os.path.dirname(view.file_name()))
             result = CLIENT_HUB.hover(src,row,col)
             logger.debug(result)
-            formatted_result = hover.format_code(result)
-            hover.show_popup(view=view, content=formatted_result, location=point)
+            hover.show_help(view,result,point)
         else:
             if not self.service_loaded:
                 self.load_service(view)
@@ -309,6 +308,10 @@ class Pytools(sublime_plugin.EventListener):
             logger.debug("ThreadRunning")
         except Exception:
             logger.exception("hover exception", exc_info=True)
+
+    def on_post_window_command(self, window, command_name, args):
+        if command_name == "exit":
+            window.run_command("pytools_shutdownserver")
 
 
 class PytoolsShutdownserverCommand(sublime_plugin.WindowCommand):
