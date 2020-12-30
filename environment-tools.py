@@ -1,6 +1,5 @@
 import sublime
 import sublime_plugin
-import subprocess
 import os
 import re
 import logging
@@ -9,34 +8,40 @@ import random
 logger = logging.getLogger(__name__)
 # logger.setLevel(logging.DEBUG)
 sh = logging.StreamHandler()
-sh.setFormatter(logging.Formatter('%(levelname)s\t%(module)s: %(lineno)d\t%(message)s'))
+sh.setFormatter(logging.Formatter("%(levelname)s\t%(module)s: %(lineno)d\t%(message)s"))
 sh.setLevel(logging.DEBUG)
 logger.addHandler(sh)
 
 
 class InvalidEnvironment(Exception):
     """Invalid python environment. Python binary not found."""
-    pass
+
+    ...
 
 
-"""Environment manager"""
+# """Environment manager"""
 CONDA = 0
 VENV = 1
 
 
 class Manager:
-    def validate(*args, **kwargs):
+    @staticmethod
+    def validate(path):
         pass
 
+    @staticmethod
     def make_setting_property(path):
         pass
 
+    @staticmethod
     def setup(settings, path):
         pass
 
+    @staticmethod
     def env_list(settings):
         pass
 
+    @staticmethod
     def remove(settings, env_id):
         pass
 
@@ -58,9 +63,10 @@ class Conda(Manager):
     @staticmethod
     def validate(path):
         if os.name == "nt":
-            return Conda.validate_nt(path)
+            valid = Conda.validate_nt(path)
         else:
-            return Conda.validate_posix(path)
+            valid = Conda.validate_posix(path)
+        return valid
 
     @staticmethod
     def browse_envs(path):
@@ -156,9 +162,10 @@ class Venv(Manager):
     @staticmethod
     def validate(path):
         if os.name == "nt":
-            return Venv.validate_nt(path)
+            valid = Venv.validate_nt(path)
         else:
-            return Venv.validate_posix(path)
+            valid = Venv.validate_posix(path)
+        return valid
 
     @staticmethod
     def make_setting_property(path):
@@ -208,15 +215,17 @@ class Venv(Manager):
 
 
 class Runtime:
-
     @staticmethod
-    def input_pane(window, title, callback, placeholder=""):
+    def input_pane(window, title, callback):
         window.show_input_panel(title, "", callback, None, None)
 
     @staticmethod
-    def quick_pane(window, items, callback, default_selected=-1):
+    def quick_pane(window, items, callback):
         window.show_quick_panel(
-            items, callback, flags=sublime.KEEP_OPEN_ON_FOCUS_LOST | sublime.MONOSPACE_FONT)
+            items,
+            callback,
+            flags=sublime.KEEP_OPEN_ON_FOCUS_LOST | sublime.MONOSPACE_FONT,
+        )
 
     @staticmethod
     def setup(manager, settings, path):
@@ -272,8 +281,9 @@ class PytoolsSetEnvironment(sublime_plugin.WindowCommand):
         try:
             self.settings = sublime.load_settings("Pytools.sublime-settings")
             self.envlist = Runtime.env_list(self.settings)
-            envsname = ["%s    %s" % (env["manager"], env["path"])
-                        for env in self.envlist]
+            envsname = [
+                "%s    %s" % (env["manager"], env["path"]) for env in self.envlist
+            ]
 
             Runtime.quick_pane(self.window, envsname, self.select_env)
         except Exception:
@@ -285,14 +295,15 @@ class PytoolsSetEnvironment(sublime_plugin.WindowCommand):
                 env = self.envlist[index]
                 prefix = env["path"]
                 self.settings.set("active_environment", prefix)
-                env_path = os.pathsep.join([prefix,
-                                            os.path.join(
-                                                prefix, "Library", "mingw-w64", "bin"),
-                                            os.path.join(
-                                                prefix, "Library", "usr", "bin"),
-                                            os.path.join(
-                                                prefix, "Library", "bin"),
-                                            os.path.join(prefix, "Scripts")])
+                env_path = os.pathsep.join(
+                    [
+                        prefix,
+                        os.path.join(prefix, "Library", "mingw-w64", "bin"),
+                        os.path.join(prefix, "Library", "usr", "bin"),
+                        os.path.join(prefix, "Library", "bin"),
+                        os.path.join(prefix, "Scripts"),
+                    ]
+                )
                 self.set("python", env_path, env["manager"])
         except Exception:
             pass
