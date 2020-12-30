@@ -1,4 +1,5 @@
 import logging
+import difflib
 import re
 import os
 import subprocess
@@ -45,7 +46,7 @@ class Formatting:
             if src is not None:
                 self.src = src
 
-            black_cmd = ["python", "-m", "black", "--diff", "-"]
+            black_cmd = ["python", "-m", "black", "-"]
             env = os.environ.copy()
 
             if os.name == "nt":
@@ -79,59 +80,51 @@ class Formatting:
 
         except Exception as err:
             logger.exception("formatting error", exc_info=True)
-            raise FormattingError from None
+            raise FormattingError from err
+
         return result
 
-    def extract_updated(self, old_src, update) -> any:
-        updates = update.splitlines()
-        old_srcs = old_src.split("\n")  # lines separated with "\n"
+    def parse_diff_header(self, param):
+        logger.debug(param)
+        # @@ -a,b +c,d @@
+        rst = re.findall(r"@@\s\-(\d*),(\d*)\s\+(\d*),(\d*)\s@@", param)
+        if rst == []:
+            raise ValueError("unable to parse")
 
-        text_edit = None
+        logger.debug(rst)
+        result = rst[0]
+        result = (int(result[0]), int(result[1])), (int(result[2]), int(result[3]))
+        logger.debug(result)
+        return result
 
-        for index, line in enumerate(updates, start=1):
+    def extract_updated(self, old_src, new_src) -> any:
+        old_src = old_src.splitlines()
+        new_src = new_src.splitlines()
+        diff = difflib.unified_diff(old_src, new_src)
+        text_edit_list = []
+        sub = ()
+        index = -1
+        line_index = 0
+        for line in diff:
+            line_index += 1
             if line.startswith("@"):
-                if text_edit is not None:
-                    _text_edit = text_edit
-                    text_edit = None
-                    yield _text_edit
-
-                def get_removed_range(args):
-                    logger.debug(args)
-                    # @@ -a,b ~~~~@@
-                    found = re.findall(r"@@\s\-(\d*),(\d*)\s.*@@", args)
-                    if found == []:
-                        raise ValueError("unable to parse")
-                    start = int(found[0][0])
-                    # -1,4 => start line 1, show 4 lines
-                    end = int(found[0][1]) - 1 + start
-                    return start, end
-
-                st, ed = get_removed_range(line)
-                logger.debug("start=%s, end=%s", st, ed)
-                logger.debug("old_srcs len=%s", len(old_srcs))
-                start = {"line": st, "character": 0}
-                # fit list zero based index
-                end = {
-                    "line": ed,
-                    "character": len(old_srcs[ed - 1]),
-                }
-                text_edit = {"range": {"start": start, "end": end}}
+                index += 1
+                text_edit = {}
+                sub, _ = self.parse_diff_header(line)
+                start = {"line": sub[0], "character": 0}
+                endline = sub[0] + sub[1] - 1
+                end = {"line": endline, "character": len(old_src[endline - 1])}
+                text_edit["range"] = {"start": start, "end": end}
+                text_edit_list.append(text_edit)
             elif line.startswith("-"):
-                # ignore removed line
                 continue
             else:
-                # line start with single character(- or + or <space>)
-                line_content = line[1:]
                 try:
-                    text_edit["newText"] = "\n".join(
-                        [text_edit["newText"], line_content]
+                    text_edit_list[index]["newText"] = "\n".join(
+                        [text_edit_list[index]["newText"], line[1:]]
                     )
                 except KeyError:
-                    text_edit["newText"] = line_content
-                except TypeError:
-                    # text_edit is None
+                    text_edit_list[index]["newText"] = line[1:]
+                except IndexError:
                     continue
-
-            # end of line
-            if index == len(updates):
-                yield text_edit
+        return text_edit_list
