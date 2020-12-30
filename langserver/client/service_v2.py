@@ -1,6 +1,5 @@
 import socket
 import os
-import re
 import subprocess
 import threading
 import random
@@ -10,39 +9,42 @@ from . import rpc, serializer
 logger = logging.getLogger(__name__)
 # logger.setLevel(logging.DEBUG)
 sh = logging.StreamHandler()
-sh.setFormatter(logging.Formatter(
-    '%(levelname)s\t%(module)s: %(lineno)d\t%(message)s'))
+sh.setFormatter(logging.Formatter("%(levelname)s\t%(module)s: %(lineno)d\t%(message)s"))
 sh.setLevel(logging.DEBUG)
 logger.addHandler(sh)
 
 
 class ServerError(Exception):
     """Server error exception"""
-    pass
+
+    ...
 
 
 class NotInitialized(Exception):
     """Server not initialized exception"""
-    pass
+
+    ...
 
 
 class ServiceUnavailable(Exception):
     """Service unavailable"""
-    pass
+
+    ...
 
 
 class ServerOffline(Exception):
     """Server offline"""
-    pass
+
+    ...
 
 
 class InternalError(Exception):
     """Internal error"""
-    pass
+
+    ...
 
 
 class Client:
-
     @staticmethod
     def send_message(data: bytes, buffer_size=1024, host=None, port=None) -> bytes:
 
@@ -61,7 +63,7 @@ class Client:
                 recvdata = s.recv(buffer_size)
                 data += recvdata
                 try:
-                    content = rpc.decode(data)
+                    rpc.decode(data)
                     break
                 except rpc.ContentIncomplete:
                     continue
@@ -102,23 +104,36 @@ class Client:
                 # so only use it if on Windows
                 si = subprocess.STARTUPINFO()
                 si.dwFlags |= subprocess.SW_HIDE | subprocess.STARTF_USESHOWWINDOW
-                server_proc = subprocess.Popen(run_server_cmd, stdin=subprocess.PIPE,
-                                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True,
-                                               env=env, startupinfo=si)
+                server_proc = subprocess.Popen(
+                    run_server_cmd,
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    shell=True,
+                    env=env,
+                    startupinfo=si,
+                )
             else:
                 server_proc = subprocess.Popen(
-                    run_server_cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE, shell=True, env=env)
+                    run_server_cmd,
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    shell=True,
+                    env=env,
+                )
 
             _, serr = server_proc.communicate()
             if server_proc.returncode != 0:
-                logger.error("server error\n%s", str.strip(serr.decode()))
+                logger.error(
+                    "server error\n%s", serr.decode().replace(os.linesep, "\n")
+                )
                 raise ServerError
         except OSError:
             logger.debug("OSError")
         except Exception:
-            logger.exception("cannot run_server")
-            raise ServerError
+            logger.exception("cannot run_server", exc_info=True)
+            raise ServerError from None
 
     def __init__(self, host=None, port=None):
         self.host = host
@@ -140,17 +155,18 @@ class Client:
             return response
         except ConnectionError:
             # logger.exception("connection server error", exc_info=False)
-            raise ServerOffline
+            raise ServerOffline from None
         except Exception:
             logger.exception("internal error", exc_info=True)
-            raise InternalError
+            raise InternalError from None
 
     def _server_thread(self):
         if self.server_valid:
             try:
-                Client.run_server(python=self.python,
-                                  script=self.server_script, env=self.env)
-            except Exception:
+                Client.run_server(
+                    python=self.python, script=self.server_script, env=self.env
+                )
+            except (FileNotFoundError, ServerError):
                 logger.exception("run_server_thread exception", exc_info=True)
                 self.server_valid = False
 
@@ -160,6 +176,7 @@ class Client:
         def make_thread():
             thread = threading.Thread(target=self._server_thread)
             return thread
+
         if self.server_thread is None:
             self.server_thread = make_thread()
             self.server_thread.start()
@@ -187,8 +204,7 @@ class Client:
     def set_python_runtime(self, python=None, env=None):
         self.python = python
         self.env = env
-        logger.debug("python = %s, env = %s", self.python,
-                     self.env)
+        logger.debug("python = %s, env = %s", self.python, self.env)
 
     def exit(self):
         msg = rpc.RequestMessage().create(self._req_id, "exit")
@@ -244,7 +260,9 @@ class Client:
                 raise ServiceUnavailable
 
             params = serializer.Completion.serialize(source, line, character)
-            msg = rpc.RequestMessage().create(self._req_id, "textDocument/completion", params)
+            msg = rpc.RequestMessage().create(
+                self._req_id, "textDocument/completion", params
+            )
             logger.debug(str(msg))
             result = self._request(str(msg))
             logger.debug(result)
@@ -265,7 +283,9 @@ class Client:
                 raise ServiceUnavailable
 
             params = serializer.Hover.serialize(source, line, character)
-            msg = rpc.RequestMessage().create(self._req_id, "textDocument/hover", params)
+            msg = rpc.RequestMessage().create(
+                self._req_id, "textDocument/hover", params
+            )
             logger.debug(str(msg))
             result = self._request(str(msg))
             logger.debug(result)
@@ -285,7 +305,8 @@ class Client:
             params = self.cached_workspace
 
             msg = rpc.RequestMessage().create(
-                self._req_id, "workspace/didChangeConfiguration", params)
+                self._req_id, "workspace/didChangeConfiguration", params
+            )
             logger.debug(str(msg))
             result = self._request(str(msg))
             logger.debug(result)
@@ -299,7 +320,9 @@ class Client:
             if not capable:
                 raise ServiceUnavailable
             params = serializer.Formatting.serialize(source)
-            msg = rpc.RequestMessage().create(self._req_id, "textDocument/formatting", params)
+            msg = rpc.RequestMessage().create(
+                self._req_id, "textDocument/formatting", params
+            )
             logger.debug(str(msg))
             result = self._request(str(msg))
             logger.debug(result)

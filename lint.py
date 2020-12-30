@@ -1,20 +1,20 @@
-import sublime
-import sublime_plugin
-import threading
+"""Linter module"""
+
+import html
+import logging
 import os
-import subprocess
+import threading
+import sublime  # pylint: disable=import-error
+import sublime_plugin  # pylint: disable=import-error
+from . import diagnostic
 
 
-def print_to_outputpane(msg):
-    win = sublime.active_window()
-    panel = win.create_output_panel("panel")
-    panel.run_command("append", {"characters": msg})
-    win.run_command('show_panel', {"panel": "output.panel"})
-
-
-def hide_outputpane():
-    win = sublime.active_window()
-    win.run_command('hide_panel', {"panel": "output.panel"})
+logger = logging.getLogger(__name__)
+# logger.setLevel(logging.DEBUG)
+sh = logging.StreamHandler()
+sh.setFormatter(logging.Formatter("%(levelname)s\t%(module)s: %(lineno)d\t%(message)s"))
+sh.setLevel(logging.DEBUG)
+logger.addHandler(sh)
 
 
 def load_settings(key):
@@ -25,121 +25,241 @@ def load_settings(key):
 def get_sysenv():
     new_paths = load_settings("path")
     env = os.environ.copy()
-    env['PATH'] = new_paths + os.path.pathsep + env['PATH']
+    env["PATH"] = new_paths + os.path.pathsep + env["PATH"]
     return env
+
+
+ERROR = 1
+WARNING = 2
+INFORMATION = 3
+HINT = 4
+
+
+MARKER = None
+LOADED = False
+
+
+class Marker:
+    """Marker object
+
+    Severity level
+    * ERROR
+    * WARNING
+    * INFORMATION
+    * HINT
+    """
+
+    mark_key = "marker%s%s"
+
+    @staticmethod
+    def get_scope(severity):
+        """get scope follow severity"""
+        scope = {
+            ERROR: "Invalid",
+            WARNING: "Invalid",
+            INFORMATION: "Comment",
+            HINT: "Comment",
+        }
+        return scope[severity]
+
+    @staticmethod
+    def get_flags(severity):
+        """get flag follow severity"""
+
+        flags = {
+            ERROR: sublime.DRAW_NO_OUTLINE,
+            WARNING: sublime.DRAW_NO_FILL
+            | sublime.DRAW_NO_OUTLINE
+            | sublime.DRAW_SOLID_UNDERLINE,
+            INFORMATION: sublime.DRAW_NO_FILL
+            | sublime.DRAW_NO_OUTLINE
+            | sublime.DRAW_SQUIGGLY_UNDERLINE
+            | sublime.HIDE_ON_MINIMAP,
+            HINT: sublime.DRAW_NO_FILL
+            | sublime.DRAW_NO_OUTLINE
+            | sublime.DRAW_SQUIGGLY_UNDERLINE
+            | sublime.HIDE_ON_MINIMAP,
+        }
+        return flags[severity]
+
+    @staticmethod
+    def get_icon(severity):
+        """get icon follow severity"""
+
+        icon = {ERROR: "circle", WARNING: "dot", INFORMATION: "dot", HINT: "bookmark"}
+        return icon[severity]
+
+    @staticmethod
+    def add_regions(view, key, regions, scope, icon, flags):
+        view.add_regions(
+            key=key, regions=regions, scope=scope, icon=icon, flags=flags,
+        )
+
+    @staticmethod
+    def prioritized(now, cached):
+        return True if now < cached else False
+
+    def __init__(self):
+        self.marks = {}  # {view_id: {line: {"regions":None,"diagnostic message":""}}}
+
+    def set_marker(self, view, severity, line, column, message, message_id):
+        view_id = view.id()
+        region = view.word(view.text_point(line, column))
+        message = "%s: %s" % (message_id, message)
+
+        if self.marks.get(view_id) is None:
+            self.marks[view_id] = {}
+
+        try:
+            cached = self.marks[view_id][line]["severity"]
+        except KeyError:
+            cached = 4
+
+        if Marker.prioritized(severity, cached):
+            self.marks[view_id][line] = {
+                "region": region,
+                "message": message,
+                "severity": severity,
+            }
+            # logger.debug(self.marks[view_id])
+
+    def apply(self, view):
+        logger.debug(self.marks)
+        view_id = view.id()
+        logger.debug(view_id)
+        marks_err = list(
+            filter(lambda mark: mark["severity"] == ERROR, self.marks[view_id].values())
+        )
+        marks_warn = list(
+            filter(
+                lambda mark: mark["severity"] == WARNING, self.marks[view_id].values()
+            )
+        )
+        marks_info = list(
+            filter(
+                lambda mark: mark["severity"] == INFORMATION,
+                self.marks[view_id].values(),
+            )
+        )
+        marks_hint = list(
+            filter(lambda mark: mark["severity"] == HINT, self.marks[view_id].values())
+        )
+        # logger.debug(marks_info)
+        err_regions = [mark["region"] for mark in marks_err]
+        warn_regions = [mark["region"] for mark in marks_warn]
+        info_regions = [mark["region"] for mark in marks_info]
+        hint_regions = [mark["region"] for mark in marks_hint]
+
+        region_map = {
+            ERROR: err_regions,
+            WARNING: warn_regions,
+            INFORMATION: info_regions,
+            HINT: hint_regions,
+        }
+
+        for severity in region_map:
+            scope = Marker.get_scope(severity)
+            icon = Marker.get_icon(severity)
+            flags = Marker.get_flags(severity)
+            key = Marker.mark_key % (view.file_name(), severity)
+            regions = region_map[severity]
+
+            Marker.add_regions(view, key, regions, scope, icon, flags)
+
+    def clear(self, view):
+        try:
+            for severity in (
+                ERROR,
+                WARNING,
+                INFORMATION,
+                HINT,
+            ):
+                key = Marker.mark_key % (view.file_name(), severity)
+                view.erase_regions(key)
+
+            del self.marks[view.id()]
+        except KeyError:
+            pass
+
+    def get_message(self, view, line):
+        try:
+            logger.debug(line)
+            region = view.line(view.text_point(line, 0))
+            logger.debug(self.marks)
+            if self.marks == {}:
+                raise ValueError("empty")
+            logger.debug(region)
+            marks = list(
+                filter(
+                    lambda mark: region.contains(mark["region"].a),
+                    self.marks[view.id()].values(),
+                )
+            )
+            logger.debug(marks)
+            return marks[0]["message"] if marks != [] else None
+        except (KeyError, ValueError):
+            return None
+
+
+def plugin_loaded():
+    global MARKER
+    global LOADED
+    MARKER = Marker()
+    LOADED = True
 
 
 class PytoolsLintCommand(sublime_plugin.TextCommand):
     def run(self, edit):
+        if LOADED:
+            thread = threading.Thread(target=self.lint)
+            thread.start()
+
+    def lint(self):
         view = self.view
-        dirname = os.path.dirname(view.file_name())
+        env = get_sysenv()
 
-        thread = threading.Thread(
-            target=self.do_lint, args=(view, dirname, view.file_name()))
-        thread.start()
+        file_name = view.file_name()
+        file_path = os.path.abspath(file_name)
 
-    def do_lint(self, view, work_dir, file_name):
-        lint_process_cmd = ["pylint", "--disable=all",
-                            "--enable=F,E,unreachable,duplicate-key,unnecessary-semicolon,global-variable-not-assigned,unused-variable,binary-op-exception,bad-format-string,anomalous-backslash-in-string,bad-open-mode",
-                            "--msg-template='{C}::{msg_id}::{line}::{column}::{msg}::{module}'",
-                            "--exit-zero", "--score=no", file_name]
-        lint_env = get_sysenv()
-        if os.name == "nt":
-            # linux subprocess module does not have STARTUPINFO
-            # so only use it if on Windows
-            si = subprocess.STARTUPINFO()
-            si.dwFlags |= subprocess.SW_HIDE | subprocess.STARTF_USESHOWWINDOW
-            lint_proc = subprocess.Popen(lint_process_cmd, shell=True,
-                                         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=lint_env, startupinfo=si, bufsize=-1)
-        else:
-            lint_proc = subprocess.Popen(lint_process_cmd, shell=True,
-                                         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=lint_env, bufsize=-1)
+        lint = diagnostic.Pylint(file_path, env=env)
+        result_msg = lint.lint(template=diagnostic.PylintFormatter.template)
+        formatted_messages = diagnostic.PylintFormatter.parse_output(result_msg)
 
-        sout, serr = lint_proc.communicate()
-        if lint_proc.returncode != 0:
-            print(serr.decode())
-        else:
-            print(sout.decode())
-            res, err = self.format_output(sout.decode())
-            if err:
-                print(err)
-                return
-            # print(res)
-            self.mark_view(view, res)
+        for msg in formatted_messages:
+            severity = msg["severity"]
+            line = msg["line"] - 1
+            column = msg["column"]
+            message = msg["message"]
+            message_code = msg["code"]
+            MARKER.set_marker(view, severity, line, column, message, message_code)
 
-    def format_output(self, data):
-        try:
-            diagnostic_l = data.split("\r\n")
+        MARKER.apply(view)
 
-            """
-            [R]efactor for a “good practice” metric violation
-            [C]onvention for coding standard violation
-            [W]arning for stylistic problems, or minor programming issues
-            [E]rror for important programming issues (i.e. most probably bug)
-            [F]atal for errors which prevented further processing
-            """
-            severity = {"E": 1, "F": 1, "W": 2, "C": 3, "R": 4}
 
-            Diagnostics = []
+class Linter(sublime_plugin.EventListener):
+    def on_hover(self, view, point, hover_zone):
+        if hover_zone == sublime.HOVER_GUTTER:
+            self.get_message(view, point)
 
-            for diagnostic in diagnostic_l:
-                # "--msg-template='{C}:{msg_id}:{line}:{column}:{msg}:{module}'",
-                try:
-                    msg_l = diagnostic.split("::")
-                    svrt = severity[msg_l[0]]
-                    range_ = {"start": {"line": int(msg_l[2]), "character": int(msg_l[3])},
-                              "end": {"line": int(msg_l[2]), "character": int(msg_l[3])}}
-                    msg = "{}:{}:{} {}".format(
-                        msg_l[5], msg_l[2], msg_l[3], msg_l[4])
+    def get_message(self, view, point):
+        line, _ = view.rowcol(point)
+        file_name = view.file_name()
+        msg = MARKER.get_message(view, line)
+        logger.debug(msg)
+        if msg is not None:
+            msg = html.escape(msg, quote=False)
+            content = "%s" % (msg)
+            self.show_popup(view, content, point)
 
-                    Diagnostic = {"range": range_,
-                                  "severity": svrt, "message": msg}
-                    Diagnostics.append(Diagnostic)
+    def show_popup(self, view, content, location):
+        if content is not None:
+            view.show_popup(
+                content,
+                sublime.HIDE_ON_MOUSE_MOVE_AWAY,
+                location=location,
+                max_width=900,
+                on_navigate=None,
+            )
 
-                except (KeyError, IndexError):
-                    continue
-
-            return {"diagnostics": Diagnostics}, None
-        except Exception as e:
-            return None, str(e)
-
-    def mark_view(self, view, diagnostics):
-        # Key
-        key_err = "pytools-lint-err"
-        key_warn = "pytools-lint-warn"
-
-        # Clear regions
-        view.erase_regions(key_err)
-        view.erase_regions(key_warn)
-
-        # Holder
-        errors = []
-        regions_err, regions_warn = [], []
-        error, warning = 0, 0
-
-        for diagnostic in diagnostics["diagnostics"]:
-            line, row = int(diagnostic["range"]["start"]["line"]) - \
-                1, int(diagnostic["range"]["start"]["character"])
-            point = view.text_point(line, row)
-            if diagnostic["severity"] == 1:
-                regions_err.append(view.line(point))
-                errors.append("❌ {}".format(diagnostic["message"]))
-                error += 1
-            elif diagnostic["severity"] == 2:
-                regions_warn.append(view.line(point))
-                errors.append("⚠ {}".format(diagnostic["message"]))
-                warning += 1
-
-        # Mark view
-        view.add_regions(key=key_err, regions=regions_err, scope="invalid.illegal", icon="",
-                         flags=sublime.DRAW_NO_FILL | sublime.DRAW_NO_OUTLINE | sublime.DRAW_SOLID_UNDERLINE)
-        view.add_regions(key=key_warn, regions=regions_warn, scope="invalid.deprecated", icon="",
-                         flags=sublime.DRAW_NO_FILL | sublime.DRAW_NO_OUTLINE | sublime.DRAW_SOLID_UNDERLINE)
-
-        print_to_outputpane("\n".join(errors))
-
-    def is_visible(self):
-        view = self.view
-        if not view.match_selector(0, "source.python"):
-            return False
-        return True
+    def on_post_save_async(self, view):
+        MARKER.clear(view)

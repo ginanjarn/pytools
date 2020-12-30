@@ -3,11 +3,11 @@
 
 class DeserializeError(Exception):
     """Unable to deserialize content"""
-    pass
+
+    ...
 
 
 class Workspace:
-
     def __init__(self, path):
         self.path = path
 
@@ -21,12 +21,11 @@ class Workspace:
         try:
             path = params["path"]
         except Exception:
-            raise DeserializeError
+            raise DeserializeError from None
         return cls(path)
 
 
 class Completion:
-
     def __init__(self, src, line, character):
         self.src = src
         self.line = line
@@ -35,8 +34,10 @@ class Completion:
     @staticmethod
     def serialize(src, line, character):
         # Line position in a document (zero-based).
-        params = {"textDocument": {"uri": src},
-                  "position": {"line": line, "character": character}}
+        params = {
+            "textDocument": {"uri": src},
+            "position": {"line": line, "character": character},
+        }
         return params
 
     @classmethod
@@ -48,12 +49,11 @@ class Completion:
             line += 1
             character = params["position"]["character"]
         except Exception:
-            raise DeserializeError
+            raise DeserializeError from None
         return cls(src, line, character)
 
 
 class Hover:
-
     def __init__(self, src, line, character):
         self.src = src
         self.line = line
@@ -62,8 +62,10 @@ class Hover:
     @staticmethod
     def serialize(src, line, character):
         # Line position in a document (zero-based).
-        params = {"textDocument": {"uri": src},
-                  "position": {"line": line, "character": character}}
+        params = {
+            "textDocument": {"uri": src},
+            "position": {"line": line, "character": character},
+        }
         return params
 
     @classmethod
@@ -75,12 +77,11 @@ class Hover:
             line += 1
             character = params["position"]["character"]
         except Exception:
-            raise DeserializeError
+            raise DeserializeError from None
         return cls(src, line, character)
 
 
 class Formatting:
-
     def __init__(self, src):
         self.src = src
 
@@ -94,5 +95,5 @@ class Formatting:
         try:
             src = params["textDocument"]["uri"]
         except Exception:
-            raise DeserializeError
+            raise DeserializeError from None
         return cls(src)
