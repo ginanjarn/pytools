@@ -7,8 +7,7 @@ import html
 logger = logging.getLogger("hover")
 # logger.setLevel(logging.DEBUG)
 sh = logging.StreamHandler()
-sh.setFormatter(logging.Formatter(
-    '%(levelname)s\t%(module)s: %(lineno)d\t%(message)s'))
+sh.setFormatter(logging.Formatter("%(levelname)s\t%(module)s: %(lineno)d\t%(message)s"))
 sh.setLevel(logging.DEBUG)
 logger.addHandler(sh)
 
@@ -29,7 +28,8 @@ def capability():
 
 class HoverError(Exception):
     """Hover Error"""
-    pass
+
+    ...
 
 
 class Hover:
@@ -40,7 +40,8 @@ class Hover:
             self.line = cparam.line
             self.character = cparam.character
         except serializer.DeserializeError:
-            raise serializer.DeserializeError
+            logger.exception("deserialize error", exc_info=True)
+            raise serializer.DeserializeError from None
 
     def project(self, path):
         p = Project(path=path)
@@ -59,20 +60,18 @@ class Hover:
             result = c.help(self.line, self.character)
 
             logger.debug(self.src)
-            logger.debug("line = %s, character = %s",
-                         self.line, self.character)
+            logger.debug("line = %s, character = %s", self.line, self.character)
             if len(result) > 0:
                 prebuit_doc = self.build_doc(result[0])
                 prebuit_doc = "".join(prebuit_doc)
-            else:            
+            else:
                 prebuit_doc = ""
         except Exception:
-            raise HoverError
+            raise HoverError from None
 
         return {"contents": {"language": "html", "value": prebuit_doc}}
 
     def build_doc(self, data):
-        result = None
         try:
             type_ = data.type
             name = data.name
@@ -86,11 +85,10 @@ class Hover:
                     module_path = data.module_path
                     module_path = module_path if module_path is not None else ""
                     line = data.line
-                    column = (data.column +
-                              1) if data.column is not None else None
+                    column = (data.column + 1) if data.column is not None else None
 
                     href = "%s:%s:%s" % (module_path, line, column)
-                    header = "%s <a href=\"%s\">%s</a>" % (type_, href, name)
+                    header = '%s <a href="%s">%s</a>' % (type_, href, name)
                     logger.debug(header)
                 return header
 
@@ -117,7 +115,6 @@ class Hover:
                     raise TypeError
                 return "<br>".join(lines)
 
-            result_body = []
             if type_ == "keyword":
                 logger.debug("this is keyword")
                 yield get_header()
@@ -133,4 +130,4 @@ class Hover:
 
         except Exception:
             logger.exception("some wrong", exc_info=True)
-            raise HoverError
+            raise HoverError from None
