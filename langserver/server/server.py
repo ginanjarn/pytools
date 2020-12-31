@@ -3,7 +3,7 @@ import logging
 import rpc
 import service.completion_v2 as completion
 import service.hover_v2 as hover
-import service.formatting_v2 as fmv2
+import service.formatting_v2 as formatting
 import service.serializer as serializer
 
 
@@ -241,19 +241,17 @@ class Server:
 
     def formatting(self, param):
         try:
-            fsv = fmv2.Formatting(param)
+            fmt = formatting.Formatting(param)
+            logger.debug("src +++++ \n%s", fmt.src)
+            result = fmt.format_code()
+            result = list(result)
+            logger.debug(result)
         except serializer.DeserializeError:
             logger.exception("InvalidParams", exc_info=True)
             raise InvalidParams from None
-        except Exception:
+        except formatting.FormattingError:
             logger.exception("InternalError", exc_info=True)
             raise InternalError from None
-
-        try:
-            logger.debug("src +++++ \n%s", fsv.src)
-            result = fsv.format_code()
-            result = list(result)
-            logger.debug(result)
         except Exception:
             logger.exception("InternalError", exc_info=True)
             raise InternalError from None
@@ -267,7 +265,7 @@ def main():
     svr.set_command("ping", svr.ping)
     svr.add_capability(completion.capability())
     svr.add_capability(hover.capability())
-    svr.add_capability(fmv2.capability())
+    svr.add_capability(formatting.capability())
 
     svr.set_command("initialize", svr.initialize)
     svr.set_command("textDocument/completion", svr.complete)
