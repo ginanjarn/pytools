@@ -1,7 +1,7 @@
 import socket
 import logging
 import rpc
-import service.completion_v2 as cpv2
+import service.completion_v2 as completion
 import service.hover_v2 as hvv2
 import service.formatting_v2 as fmv2
 import service.serializer as serializer
@@ -173,29 +173,27 @@ class Server:
 
     def complete(self, params=None):
         try:
-            csv = cpv2.Completion(params)
+            cmpl = completion.Completion(params)
+            logger.debug(
+                "line: %s\ncharacter: %s\nsrc +++++ \n%s",
+                cmpl.line,
+                cmpl.character,
+                cmpl.src,
+            )
+
+            project = None if not self.workspace else cmpl.project(self.workspace.path)
+            result = cmpl.complete(project=project)
+            result = list(result)  # convert to list
+            logger.debug(result)
+
         except serializer.DeserializeError:
             logger.exception("InvalidParams", exc_info=True)
             raise InvalidParams from None
+        except completion.CompletionError:
+            logger.exception("CompletionError", exc_info=True)
+            raise InternalError from None
         except Exception:
             logger.exception("InternalError", exc_info=True)
-            raise InternalError from None
-
-        try:
-            logger.debug(
-                "line: %s\ncharacter: %s\nsrc +++++ \n%s",
-                csv.line,
-                csv.character,
-                csv.src,
-            )
-            project = None
-            if self.workspace is not None:
-                project = csv.project(self.workspace.path)
-            result = csv.complete(project=project)
-            result = list(result)
-            logger.debug(result)
-        except Exception:
-            logger.exception("CompletionError", exc_info=True)
             raise InternalError from None
 
         return result
@@ -269,7 +267,7 @@ def main():
     svr = Server(port=2048)
     svr.set_command("exit", svr.exit)
     svr.set_command("ping", svr.ping)
-    svr.add_capability(cpv2.capability())
+    svr.add_capability(completion.capability())
     svr.add_capability(hvv2.capability())
     svr.add_capability(fmv2.capability())
 

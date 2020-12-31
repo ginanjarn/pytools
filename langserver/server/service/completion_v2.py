@@ -32,35 +32,28 @@ class CompletionError(Exception):
 
 class Completion:
     def __init__(self, params):
-        try:
-            cparam = serializer.Completion.deserialize(params)
-            self.src = cparam.src
-            self.line = cparam.line
-            self.character = cparam.character
-        except serializer.DeserializeError:
-            logger.exception("deserialize error", exc_info=True)
-            raise serializer.DeserializeError from None
+        cparam = serializer.Completion.deserialize(params)
+        self.src = cparam.src
+        self.line = cparam.line
+        self.character = cparam.character
 
-    def project(self, path):
-        p = Project(path=path)
-        return p
+    @staticmethod
+    def project(path):
+        proj = Project(path=path)
+        return proj
 
-    def complete(self, src=None, line=None, character=None, project=None):
-        if src is not None:
-            self.src = src
-        if line is not None:
-            self.line = line
-        if character is not None:
-            self.character = character
+    def complete(self, project=None):
+        """Fetch completion
+
+        Yield:
+            completion(str): completion result
+        """
 
         try:
-            c = Script(source=self.src, project=project)
-            result = c.complete(self.line, self.character)
-            for r in result:
-                completion = {}
-                completion["label"] = r.name_with_symbols
-                completion["kind"] = r.type
-                yield completion
+            script = Script(source=self.src, project=project)
+            results = script.complete(self.line, self.character)
+            for result in results:
+                yield {"label": result.name_with_symbols, "kind": result.type}
         except Exception:
             logger.exception("fetch completion error", exc_info=True)
             raise CompletionError from None
