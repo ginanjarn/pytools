@@ -2,7 +2,7 @@ import socket
 import logging
 import rpc
 import service.completion_v2 as completion
-import service.hover_v2 as hvv2
+import service.hover_v2 as hover
 import service.formatting_v2 as fmv2
 import service.serializer as serializer
 
@@ -200,26 +200,24 @@ class Server:
 
     def hover(self, params=None):
         try:
-            hsv = hvv2.Hover(params)
+            hover_ = hover.Hover(params)
+            logger.debug(
+                "line: %s\ncharacter: %s\nsrc +++++ \n%s",
+                hover_.line,
+                hover_.character,
+                hover_.src,
+            )
+            
+            project = None if not self.workspace else hover_.project(self.workspace.path)
+            result = hover_.hover(project=project)
+            logger.debug(result)
+
+        except hover.HoverError:
+            logger.exception("InternalError", exc_info=True)
+            raise InternalError from None
         except serializer.DeserializeError:
             logger.exception("InvalidParams", exc_info=True)
             raise InvalidParams from None
-        except Exception:
-            logger.exception("InternalError", exc_info=True)
-            raise InternalError from None
-
-        try:
-            logger.debug(
-                "line: %s\ncharacter: %s\nsrc +++++ \n%s",
-                hsv.line,
-                hsv.character,
-                hsv.src,
-            )
-            project = None
-            if self.workspace is not None:
-                project = hsv.project(self.workspace.path)
-            result = hsv.hover(project=project)
-            logger.debug(result)
         except Exception:
             logger.exception("InternalError", exc_info=True)
             raise InternalError from None
@@ -268,7 +266,7 @@ def main():
     svr.set_command("exit", svr.exit)
     svr.set_command("ping", svr.ping)
     svr.add_capability(completion.capability())
-    svr.add_capability(hvv2.capability())
+    svr.add_capability(hover.capability())
     svr.add_capability(fmv2.capability())
 
     svr.set_command("initialize", svr.initialize)
