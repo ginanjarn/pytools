@@ -17,7 +17,6 @@ HOVER_CAPABLE = True
 
 try:
     from jedi import Script, Project
-    from . import serializer
 except ModuleNotFoundError:
     HOVER_CAPABLE = False
 
@@ -33,11 +32,10 @@ class HoverError(Exception):
 
 
 class Hover:
-    def __init__(self, params):
-        cparam = serializer.Hover.deserialize(params)
-        self.src = cparam.src
-        self.line = cparam.line
-        self.character = cparam.character
+    def __init__(self, src, line, character):
+        self.src = src
+        self.line = line
+        self.character = character
 
     @staticmethod
     def project(path):

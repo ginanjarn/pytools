@@ -15,7 +15,6 @@ COMPLETION_CAPABLE = True
 
 try:
     from jedi import Script, Project
-    from . import serializer
 except ModuleNotFoundError:
     COMPLETION_CAPABLE = False
 
@@ -31,11 +30,10 @@ class CompletionError(Exception):
 
 
 class Completion:
-    def __init__(self, params):
-        cparam = serializer.Completion.deserialize(params)
-        self.src = cparam.src
-        self.line = cparam.line
-        self.character = cparam.character
+    def __init__(self, src, line, character):
+        self.src = src
+        self.line = line
+        self.character = character
 
     @staticmethod
     def project(path):

@@ -18,7 +18,6 @@ FORMATTING_CAPABLE = True
 
 try:
     import black
-    from . import serializer
 except ModuleNotFoundError:
     FORMATTING_CAPABLE = False
 
@@ -34,9 +33,8 @@ class FormattingError(Exception):
 
 
 class Formatting:
-    def __init__(self, params):
-        cparam = serializer.Formatting.deserialize(params)
-        self.src = cparam.src
+    def __init__(self, src):
+        self.src = src
 
     def format_code(self, src=None):
         try:

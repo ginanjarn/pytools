@@ -76,7 +76,6 @@ class Server:
         self.wait_next = True
         self.command = {}
 
-
         self.capability = {}
         self.workspace: serializer.Workspace = None
 
@@ -132,6 +131,7 @@ class Server:
     def process(self, data: str):
         logger.debug(data)
         pid = -1
+        resp_msg = None
 
         try:
             req_msg = rpc.RequestMessage().parse(data)
@@ -154,7 +154,7 @@ class Server:
 
         except InvalidParams:
             logger.exception("invalid params")
-            err_msg = rpc.ResponseMessage(INVALID_PARAMS)
+            err_msg = rpc.ResponseError(INVALID_PARAMS)
             logger.debug(err_msg.error)
             resp_msg = rpc.ResponseMessage().create(pid, None, err_msg.error)
 
@@ -185,12 +185,17 @@ class Server:
 
     def complete(self, params):
         try:
-            cmpl = completion.Completion(params)
+            cparam = serializer.Hover.deserialize(params)
+            src = cparam.src
+            line = cparam.line
+            character = cparam.character
+
+            cmpl = completion.Completion(src, line, character)
             logger.debug(
                 "line: %s\ncharacter: %s\nsrc +++++ \n%s",
-                cmpl.line,
-                cmpl.character,
-                cmpl.src,
+                line,
+                character,
+                src,
             )
 
             project = None if not self.workspace else cmpl.project(self.workspace.path)
@@ -212,14 +217,17 @@ class Server:
 
     def hover(self, params):
         try:
+            cparam = serializer.Hover.deserialize(params)
+            src = cparam.src
+            line = cparam.line
+            character = cparam.character
 
-            hovr = hover.Hover(params)
-
+            hovr = hover.Hover(src, line, character)
             logger.debug(
                 "line: %s\ncharacter: %s\nsrc +++++ \n%s",
-                hovr.line,
-                hovr.character,
-                hovr.src,
+                line,
+                character,
+                src,
             )
 
             project = None if not self.workspace else hovr.project(self.workspace.path)
@@ -254,9 +262,12 @@ class Server:
 
         return None
 
-    def format_(self, param):
+    def format_(self, params):
         try:
-            fmt = formatting.Formatting(param)
+            cparam = serializer.Formatting.deserialize(params)
+            src = cparam.src
+
+            fmt = formatting.Formatting(src)
             logger.debug("src +++++ \n%s", fmt.src)
             result = fmt.format_code()
             result = list(result)
