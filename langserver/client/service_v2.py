@@ -196,6 +196,7 @@ class Client:
         self.exit()
         self.capability = None
         self.server_valid = None
+        self.cached_workspace = None
 
     @property
     def _req_id(self):

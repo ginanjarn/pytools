@@ -1,9 +1,9 @@
 import socket
 import logging
 import rpc
-import service.completion_v2 as cpv2
-import service.hover_v2 as hvv2
-import service.formatting_v2 as fmv2
+import service.completion_v2 as completion
+import service.hover_v2 as hover
+import service.formatting_v2 as formatting
 import service.serializer as serializer
 
 
@@ -25,56 +25,70 @@ SERVER_ERROR_END = -32000
 
 
 class ParseError(Exception):
-    pass
+    """Unable to parse message body"""
+
+    ...
 
 
 class InvalidRequest(Exception):
-    pass
+    """Invalid request"""
+
+    ...
 
 
 class MethodNotFound(Exception):
-    pass
+    """Command method not found"""
+
+    ...
 
 
 class InvalidParams(Exception):
-    pass
+    """Invalid params"""
+
+    ...
 
 
 class InternalError(Exception):
-    pass
+    """Internal error"""
+
+    ...
 
 
 class ServerErrorStart(Exception):
-    pass
+    """Server error at starting"""
+
+    ...
 
 
 class ServerErrorEnd(Exception):
-    pass
+    """Server error at shutdown"""
+
+    ...
 
 
 class Server:
+    """Server"""
+
     def __init__(self, host=None, port=None):
         self.host = host
         self.port = port
 
         self.wait_next = True
         self.command = {}
+
+
         self.capability = {}
         self.workspace: serializer.Workspace = None
 
-    def listen(self, buffer_size=1024):
-        HOST = "127.0.0.1"
-        PORT = 2048
+    def listen(self, host=None, port=None, buffer_size=1024):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
 
-        if self.host is not None:
-            HOST = self.host
-        if self.port is not None:
-            PORT = self.port
+            host = "127.0.0.1" if host is None else host
+            port = 2048 if port is None else port
 
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.bind((HOST, PORT))
-            s.listen()
-            conn, addr = s.accept()
+            sock.bind((host, port))
+            sock.listen()
+            conn, addr = sock.accept()
             with conn:
                 print("Connected by", addr)
                 data = b""
@@ -100,7 +114,7 @@ class Server:
     def loop(self, buffer_size=1024):
         while True:
             if self.wait_next:
-                self.listen(buffer_size)
+                self.listen(self.host, self.port, buffer_size)
             else:
                 break
 
@@ -109,119 +123,115 @@ class Server:
 
     def run_command(self, method, params):
         func = self.command.get(method, None)
-        if func is None:
+        if not func:  # for object
             raise MethodNotFound
+
         results = func(params)
         return results
 
     def process(self, data: str):
         logger.debug(data)
-        req_msg = None
-        resp_msg = None
-
-        results = None
-        err_msg = rpc.ResponseError(code=0)
-        pid = None
+        pid = -1
 
         try:
             req_msg = rpc.RequestMessage().parse(data)
             pid = req_msg.id
-        except rpc.ParseError:
-            logger.exception("unable parse json", exc_info=True)
-            err = rpc.ResponseError(PARSE_ERROR)
-            err_msg.error = err.error
+            results = self.run_command(req_msg.method, req_msg.params)
+            err_msg = rpc.ResponseError(code=0)
             resp_msg = rpc.ResponseMessage().create(pid, results, err_msg.error)
 
-        if req_msg is not None:
-            try:
-                results = self.run_command(req_msg.method, req_msg.params)
-            except MethodNotFound:
-                logger.exception("method not found")
-                err = rpc.ResponseError(METHOD_NOT_FOUND)
-                err_msg.error = err.error
-                logger.debug(err_msg.error)
-            except InternalError:
-                logger.exception("internal error")
-                err = rpc.ResponseError(INTERNAL_ERROR)
-                err_msg.error = err.error
-                logger.debug(err_msg.error)
-            except InvalidParams:
-                logger.exception("invalid params")
-                err = rpc.ResponseMessage(INVALID_PARAMS)
-                err_msg.error = err.error
-                logger.debug(err_msg.error)
-            finally:
-                resp_msg = rpc.ResponseMessage().create(pid, results, err_msg.error)
+        except rpc.ParseError:
+
+            logger.exception("unable parse json", exc_info=True)
+            err_msg = rpc.ResponseError(PARSE_ERROR)
+            resp_msg = rpc.ResponseMessage().create(pid, None, err_msg.error)
+
+        except MethodNotFound:
+            logger.exception("method not found")
+            err_msg = rpc.ResponseError(METHOD_NOT_FOUND)
+            logger.debug(err_msg.error)
+            resp_msg = rpc.ResponseMessage().create(pid, None, err_msg.error)
+
+        except InvalidParams:
+            logger.exception("invalid params")
+            err_msg = rpc.ResponseMessage(INVALID_PARAMS)
+            logger.debug(err_msg.error)
+            resp_msg = rpc.ResponseMessage().create(pid, None, err_msg.error)
+
+        except InternalError:
+            logger.exception("internal error")
+            err_msg = rpc.ResponseError(INTERNAL_ERROR)
+
+            logger.debug(err_msg.error)
+            resp_msg = rpc.ResponseMessage().create(pid, None, err_msg.error)
 
         return str(resp_msg)
+
+    def add_capability(self, capability):
+        self.capability.update(capability)
+
+    def ping(self, params=None):
+        logger.info("ping test")
+        return params
+
+    def initialize(self, params=None):
+        logger.info("initialize")
+        return self.capability
 
     def exit(self, params=None):
         logger.info("exiting")
         self.wait_next = False
         return None
 
-    def ping(self, params=None):
-        logger.info("ping test")
-        return params
-
-    def add_capability(self, capability):
-        self.capability.update(capability)
-
-    def initialize(self, params=None):
-        logger.info("initialize")
-        return self.capability
-
-    def complete(self, params=None):
+    def complete(self, params):
         try:
-            csv = cpv2.Completion(params)
+            cmpl = completion.Completion(params)
+            logger.debug(
+                "line: %s\ncharacter: %s\nsrc +++++ \n%s",
+                cmpl.line,
+                cmpl.character,
+                cmpl.src,
+            )
+
+            project = None if not self.workspace else cmpl.project(self.workspace.path)
+            result = cmpl.complete(project=project)
+            result = list(result)  # convert to list
+            logger.debug(result)
+
         except serializer.DeserializeError:
             logger.exception("InvalidParams", exc_info=True)
             raise InvalidParams from None
+        except completion.CompletionError:
+            logger.exception("CompletionError", exc_info=True)
+            raise InternalError from None
         except Exception:
             logger.exception("InternalError", exc_info=True)
-            raise InternalError from None
-
-        try:
-            logger.debug(
-                "line: %s\ncharacter: %s\nsrc +++++ \n%s",
-                csv.line,
-                csv.character,
-                csv.src,
-            )
-            project = None
-            if self.workspace is not None:
-                project = csv.project(self.workspace.path)
-            result = csv.complete(project=project)
-            result = list(result)
-            logger.debug(result)
-        except Exception:
-            logger.exception("CompletionError", exc_info=True)
             raise InternalError from None
 
         return result
 
-    def hover(self, params=None):
+    def hover(self, params):
         try:
-            hsv = hvv2.Hover(params)
+
+            hovr = hover.Hover(params)
+
+            logger.debug(
+                "line: %s\ncharacter: %s\nsrc +++++ \n%s",
+                hovr.line,
+                hovr.character,
+                hovr.src,
+            )
+
+            project = None if not self.workspace else hovr.project(self.workspace.path)
+            result = hovr.hover(project=project)
+            logger.debug(result)
+
         except serializer.DeserializeError:
             logger.exception("InvalidParams", exc_info=True)
             raise InvalidParams from None
-        except Exception:
+        except hover.HoverError:
             logger.exception("InternalError", exc_info=True)
             raise InternalError from None
-
-        try:
-            logger.debug(
-                "line: %s\ncharacter: %s\nsrc +++++ \n%s",
-                hsv.line,
-                hsv.character,
-                hsv.src,
-            )
-            project = None
-            if self.workspace is not None:
-                project = hsv.project(self.workspace.path)
-            result = hsv.hover(project=project)
-            logger.debug(result)
         except Exception:
             logger.exception("InternalError", exc_info=True)
             raise InternalError from None
@@ -229,9 +239,12 @@ class Server:
         return result
 
     def change_workspace_config(self, params):
-        workspace = None
         try:
             workspace = serializer.Workspace.deserialize(params)
+
+            self.workspace = workspace
+            logger.debug(self.workspace.path)
+
         except serializer.DeserializeError:
             logger.exception("InvalidParams", exc_info=True)
             raise InvalidParams from None
@@ -239,25 +252,22 @@ class Server:
             logger.exception("invalid_params", exc_info=True)
             raise InternalError from None
 
-        self.workspace = workspace
-        logger.debug(self.workspace.path)
         return None
 
-    def formatting(self, param):
+    def format_(self, param):
         try:
-            fsv = fmv2.Formatting(param)
+            fmt = formatting.Formatting(param)
+            logger.debug("src +++++ \n%s", fmt.src)
+            result = fmt.format_code()
+            result = list(result)
+            logger.debug(result)
+
         except serializer.DeserializeError:
             logger.exception("InvalidParams", exc_info=True)
             raise InvalidParams from None
-        except Exception:
+        except formatting.FormattingError:
             logger.exception("InternalError", exc_info=True)
             raise InternalError from None
-
-        try:
-            logger.debug("src +++++ \n%s", fsv.src)
-            result = fsv.format_code()
-            result = list(result)
-            logger.debug(result)
         except Exception:
             logger.exception("InternalError", exc_info=True)
             raise InternalError from None
@@ -269,15 +279,15 @@ def main():
     svr = Server(port=2048)
     svr.set_command("exit", svr.exit)
     svr.set_command("ping", svr.ping)
-    svr.add_capability(cpv2.capability())
-    svr.add_capability(hvv2.capability())
-    svr.add_capability(fmv2.capability())
+    svr.add_capability(completion.capability())
+    svr.add_capability(hover.capability())
+    svr.add_capability(formatting.capability())
 
     svr.set_command("initialize", svr.initialize)
     svr.set_command("textDocument/completion", svr.complete)
     svr.set_command("textDocument/hover", svr.hover)
     svr.set_command("workspace/didChangeConfiguration", svr.change_workspace_config)
-    svr.set_command("textDocument/formatting", svr.formatting)
+    svr.set_command("textDocument/formatting", svr.format_)
 
     svr.loop()
 
