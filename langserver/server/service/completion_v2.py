@@ -1,5 +1,8 @@
 """Completion module"""
+
+
 import logging
+from typing import Iterator, Dict, Any
 
 
 logger = logging.getLogger("formatting")
@@ -14,12 +17,12 @@ COMPLETION_CAPABLE = True
 
 
 try:
-    from jedi import Script, Project
+    from jedi import Script, Project  # type: ignore
 except ModuleNotFoundError:
     COMPLETION_CAPABLE = False
 
 
-def capability():
+def capability() -> Dict[str, Any]:
     return {"completionProvider": {"resolveProvider": COMPLETION_CAPABLE}}
 
 
@@ -30,17 +33,17 @@ class CompletionError(Exception):
 
 
 class Completion:
-    def __init__(self, src, line, character):
+    def __init__(self, src: str, line: int, character: int) -> None:
         self.src = src
         self.line = line
         self.character = character
 
     @staticmethod
-    def project(path):
+    def project(path: str) -> "Project":
         proj = Project(path=path)
         return proj
 
-    def complete(self, project=None):
+    def complete(self, project: "Project" = None) -> Iterator[Dict[str, Any]]:
         """Fetch completion
 
         Yield:
