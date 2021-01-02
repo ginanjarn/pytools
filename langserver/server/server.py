@@ -185,7 +185,7 @@ class Server:
 
     def complete(self, params):
         try:
-            cparam = serializer.Hover.deserialize(params)
+            cparam = serializer.CompletionParams.deserialize(params)
             src = cparam.src
             line = cparam.line
             character = cparam.character
@@ -217,7 +217,7 @@ class Server:
 
     def hover(self, params):
         try:
-            cparam = serializer.Hover.deserialize(params)
+            cparam = serializer.HoverParams.deserialize(params)
             src = cparam.src
             line = cparam.line
             character = cparam.character
@@ -248,7 +248,7 @@ class Server:
 
     def change_workspace_config(self, params):
         try:
-            workspace = serializer.Workspace.deserialize(params)
+            workspace = serializer.WorkspaceParams.deserialize(params)
 
             self.workspace = workspace
             logger.debug(self.workspace.path)
@@ -264,7 +264,7 @@ class Server:
 
     def format_(self, params):
         try:
-            cparam = serializer.Formatting.deserialize(params)
+            cparam = serializer.FormattingParams.deserialize(params)
             src = cparam.src
 
             fmt = formatting.Formatting(src)
