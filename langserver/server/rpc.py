@@ -3,6 +3,7 @@
 import re
 import json
 import logging
+from typing import Tuple, Dict, Any, Union, Optional
 
 logger = logging.getLogger("main")
 # logger.setLevel(logging.DEBUG)
@@ -36,14 +37,32 @@ class ContentOverflow(Exception):
     ...
 
 
-def _get_head_and_body(data: bytes) -> (str, str):
+class ParseError(Exception):
+    """Unable to parse"""
+
+    ...
+
+
+class IDInvalidError(Exception):
+    """Unable to get ID"""
+
+    ...
+
+
+class MethodInvalidError(Exception):
+    """Unable to get METHOD"""
+
+    ...
+
+
+def _get_head_and_body(data: bytes) -> Tuple[str, str]:
     dl = data.split(b"\r\n\r\n")
     if len(dl) != 2:
         raise ContentInvalid
     return (dl[0]).decode("ascii"), dl[1].decode("utf-8")
 
 
-def _get_contentlength(header: str):
+def _get_contentlength(header: str) -> int:
     cl = re.findall(r"Content-Length: (\d*)", header)
     if len(cl) != 1:
         raise ContentInvalid
@@ -61,115 +80,130 @@ def decode(data: bytes) -> str:
         return body
 
 
-class ParseError(Exception):
-    """Unable to parse"""
-
-    ...
-
-
 class Message:
-    def __init__(self, message=None):
+    def __init__(self, message: Dict[str, Any] = None) -> None:
         self._message = {"jsonrpc": "2.0"}
         if message is not None:
             self._message.update(message)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return json.dumps(self._message)
 
-    @classmethod
-    def parse(cls, src: str):
-        try:
-            message = json.loads(src)
-        except Exception:
-            logger.exception("error parse message")
-            raise ParseError from None
-        return cls(message)
-
     @property
-    def message(self):
+    def message(self) -> Dict[str, Any]:
         return self._message
 
     @message.setter
-    def message(self, msg_data: dict):
-        if not isinstance(msg_data, dict):
-            raise ValueError("required input %s found '%s'" % (type({}), type(msg_data)))
+    def message(self, msg_data: Dict[str, Any]) -> None:
         self._message.update(msg_data)
 
 
 class RequestMessage(Message):
+    @classmethod
+    def parse(cls, src: str) -> "RequestMessage":
+        try:
+            message = json.loads(src)
+        except json.JSONDecodeError:
+            logger.exception("error parse message")
+            raise ParseError from None
+        return cls(message)
 
     @classmethod
-    def create(cls, msg_id, method, params=None, **kwargs):
+    def create(
+        cls,
+        msg_id: Union[int, str],
+        method: str,
+        params: Any = None,
+        **kwargs: Optional[Any]
+    ) -> "RequestMessage":
         message = {}
         message.update({"id": msg_id, "method": method, "params": params})
         message.update(kwargs)
         return cls(message)
 
     @property
-    def id(self):
-        return self._message.get("id", None)
+    def id(self) -> Union[int, str]:
+        id_ = self._message.get("id", None)
+        if not id_:  # for Union[int, str]
+            raise IDInvalidError
+        return id_
 
     @property
-    def method(self):
-        return self._message.get("method", None)
+    def method(self) -> str:
+        method_ = self._message.get("method", None)
+        if not method_:  # for str
+            raise MethodInvalidError
+        return method_
 
     @property
-    def params(self):
+    def params(self) -> Optional[Any]:
         return self._message.get("params", None)
 
 
 class ResponseMessage(Message):
+    @classmethod
+    def parse(cls, src: str) -> "ResponseMessage":
+        try:
+            message = json.loads(src)
+        except json.JSONDecodeError:
+            logger.exception("error parse message")
+            raise ParseError from None
+        return cls(message)
 
     @classmethod
-    def create(cls, msg_id, results=None, error=None, **kwargs):
+    def create(
+        cls,
+        msg_id: Union[int, str],
+        results: Optional[Any] = None,
+        error: Optional[Any] = None,
+        **kwargs: Optional[Any]
+    ) -> "ResponseMessage":
         message = {"id": msg_id, "results": results, "error": error}
         message.update(kwargs)
         return cls(message)
 
     @property
-    def id(self):
-        return self._message.get("id", None)
+    def id(self) -> Union[int, str]:
+        id_ = self._message.get("id", None)
+        if not id_:  # for Union[int, str]
+            raise IDInvalidError
+        return id_
 
     @property
-    def results(self):
+    def results(self) -> Optional[Union[int, str]]:
         return self._message.get("results", None)
 
     @property
-    def error(self):
+    def error(self) -> Optional[Any]:
         return self._message.get("error", None)
 
 
 class ResponseError:
-    def __init__(self, code, *args, message="", **kwargs):
+    def __init__(self, code: int, message: str = "", **kwargs: Optional[Any]) -> None:
         self._error = {"code": code, "message": message}
-        if len(args) > 0:
-            for arg in args:
-                self._error.update(arg)
         self._error.update(kwargs)
 
     @classmethod
-    def parse(cls, params):
+    def parse(cls, params: Dict[str, Any]) -> "ResponseError":
         if not isinstance(params, dict):
             raise ParseError
 
-        code = params.pop("code")
-        message = params.pop("message")
-        return cls(code, message, params)
+        code: int = params.pop("code")
+        message: str = params.pop("message")
+        return cls(code, message=message, params=params)
 
     @property
-    def error(self):
+    def error(self) -> Dict[str, Any]:
         return self._error
 
     @error.setter
-    def error(self, err_data: dict):
-        if not isinstance(err_data, dict):
-            raise ValueError("required input <class 'dict'> found '%s'" % type(err_data))
+    def error(self, err_data: Dict[str, Any]) -> None:
         self._error.update(err_data)
 
     @property
-    def code(self):
-        return self._error.get("code", None)
+    def code(self) -> Union[int, Any]:
+        return self._error.get("code", 0)
 
     @property
-    def message(self):
+    def message(self) -> str:
         return self.error.get("message", "")

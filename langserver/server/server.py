@@ -1,5 +1,6 @@
 import socket
 import logging
+from typing import Union
 import rpc
 import service.completion_v2 as completion
 import service.hover_v2 as hover
@@ -130,20 +131,29 @@ class Server:
 
     def process(self, data: str):
         logger.debug(data)
-        pid = -1
+        pid: Union[int, str] = -1
         resp_msg = None
 
         try:
-            req_msg = rpc.RequestMessage().parse(data)
+            req_msg: rpc.RequestMessage = rpc.RequestMessage().parse(data)
             pid = req_msg.id
             results = self.run_command(req_msg.method, req_msg.params)
             err_msg = rpc.ResponseError(code=0)
             resp_msg = rpc.ResponseMessage().create(pid, results, err_msg.error)
 
         except rpc.ParseError:
-
             logger.exception("unable parse json", exc_info=True)
             err_msg = rpc.ResponseError(PARSE_ERROR)
+            resp_msg = rpc.ResponseMessage().create(pid, None, err_msg.error)
+
+        except rpc.IDInvalidError:
+            logger.exception("unable get ID", exc_info=True)
+            err_msg = rpc.ResponseError(INVALID_REQUEST)
+            resp_msg = rpc.ResponseMessage().create(pid, None, err_msg.error)
+
+        except rpc.MethodInvalidError:
+            logger.exception("unable get method", exc_info=True)
+            err_msg = rpc.ResponseError(INVALID_REQUEST)
             resp_msg = rpc.ResponseMessage().create(pid, None, err_msg.error)
 
         except MethodNotFound:
@@ -161,7 +171,6 @@ class Server:
         except InternalError:
             logger.exception("internal error")
             err_msg = rpc.ResponseError(INTERNAL_ERROR)
-
             logger.debug(err_msg.error)
             resp_msg = rpc.ResponseMessage().create(pid, None, err_msg.error)
 
