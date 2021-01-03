@@ -1,6 +1,8 @@
+"""Server module"""
+
 import socket
 import logging
-from typing import Union
+from typing import Union, Dict, Any, Callable, Optional, List, Iterable
 import rpc
 import service.completion_v2 as completion
 import service.hover_v2 as hover
@@ -70,58 +72,31 @@ class ServerErrorEnd(Exception):
 class Server:
     """Server"""
 
-    def __init__(self, host=None, port=None):
+    def __init__(self, host: str = None, port: int = None) -> None:
         self.host = host
         self.port = port
 
         self.wait_next = True
-        self.command = {}
+        self.command: Dict[str, Callable[[Any], Optional[Any]]] = {}
 
-        self.capability = {}
-        self.workspace: serializer.Workspace = None
+        self.capability: Dict[str, Any] = {}
+        self.workspace: Optional[serializer.WorkspaceParams] = None
 
-    def listen(self, host=None, port=None, buffer_size=1024):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+    def add_capability(self, capability: Dict[str, Any]) -> None:
+        """Add implemented capability"""
 
-            host = "127.0.0.1" if host is None else host
-            port = 2048 if port is None else port
+        self.capability.update(capability)
 
-            sock.bind((host, port))
-            sock.listen()
-            conn, addr = sock.accept()
-            with conn:
-                print("Connected by", addr)
-                data = b""
-                content = ""
-                while True:
-                    recvdata = conn.recv(buffer_size)
-                    data += recvdata
-                    try:
-                        logger.debug(data)
-                        content = rpc.decode(data)
-                        break
-                    except rpc.ContentIncomplete:
-                        continue
-                    except rpc.ContentInvalid:
-                        break
-                    except rpc.ContentOverflow:
-                        break
+    def set_command(self, name: str, function: Callable[[Dict[str, Any]], Any]) -> None:
+        """Set command map"""
 
-                logger.debug(content)
-                result = self.process(content)
-                conn.sendall(rpc.encode(result))
-
-    def loop(self, buffer_size=1024):
-        while True:
-            if self.wait_next:
-                self.listen(self.host, self.port, buffer_size)
-            else:
-                break
-
-    def set_command(self, name, function):
         self.command[name] = function
 
-    def run_command(self, method, params):
+    def run_command(
+        self, method: str, params: Optional[Dict[str, Any]]
+    ) -> Optional[Any]:
+        """Execute mapped command"""
+
         func = self.command.get(method, None)
         if not func:  # for object
             raise MethodNotFound
@@ -129,10 +104,12 @@ class Server:
         results = func(params)
         return results
 
-    def process(self, data: str):
+    def process(self, data: str) -> str:
+        """Process request data"""
+
         logger.debug(data)
         pid: Union[int, str] = -1
-        resp_msg = None
+        resp_msg: rpc.ResponseMessage
 
         try:
             req_msg: rpc.RequestMessage = rpc.RequestMessage().parse(data)
@@ -176,40 +153,93 @@ class Server:
 
         return str(resp_msg)
 
-    def add_capability(self, capability):
-        self.capability.update(capability)
+    def listen(
+        self, host: str = None, port: int = None, buffer_size: int = 1024
+    ) -> None:
+        """Socket listener"""
 
-    def ping(self, params=None):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+
+            host = "127.0.0.1" if host is None else host
+            port = 2048 if port is None else port
+
+            sock.bind((host, port))
+            sock.listen()
+            conn, addr = sock.accept()
+            with conn:
+                print("Connected by", addr)
+                data = b""
+                content = ""
+                while True:
+                    recvdata = conn.recv(buffer_size)
+                    data += recvdata
+                    try:
+                        logger.debug(data)
+                        content = rpc.decode(data)
+                        break
+                    except rpc.ContentIncomplete:
+                        continue
+                    except rpc.ContentInvalid:
+                        break
+                    except rpc.ContentOverflow:
+                        break
+
+                logger.debug(content)
+                result = self.process(content)
+                conn.sendall(rpc.encode(result))
+
+    def loop(self, buffer_size: int = 1024) -> None:
+        """main loop"""
+
+        while True:
+            if self.wait_next:
+                self.listen(self.host, self.port, buffer_size)
+            else:
+                break
+
+    def ping(self, params: Optional[Any] = None) -> Any:
+        """Ping test"""
+
         logger.info("ping test")
         return params
 
-    def initialize(self, params=None):
+    def initialize(self, params: Optional[Any] = None) -> Dict[str, Any]:
+        """Initialize
+
+        Return
+            capability
+        """
+
         logger.info("initialize")
         return self.capability
 
-    def exit(self, params=None):
+    def exit(self, params: Optional[Any] = None) -> Optional[Any]:
+        """Exit services"""
+
         logger.info("exiting")
         self.wait_next = False
         return None
 
-    def complete(self, params):
+    def complete(self, params: Dict[str, Any]) -> Optional[List[Dict[str, Any]]]:
+        """Fetch completion
+
+        Return:
+            completion list object
+        """
+
         try:
             cparam = serializer.CompletionParams.deserialize(params)
             src = cparam.src
             line = cparam.line
             character = cparam.character
-
             cmpl = completion.Completion(src, line, character)
             logger.debug(
-                "line: %s\ncharacter: %s\nsrc +++++ \n%s",
-                line,
-                character,
-                src,
+                "line: %s\ncharacter: %s\nsrc +++++ \n%s", line, character, src,
             )
 
             project = None if not self.workspace else cmpl.project(self.workspace.path)
-            result = cmpl.complete(project=project)
-            result = list(result)  # convert to list
+            i_result: Iterable = cmpl.complete(project=project)
+            result: List = list(i_result)  # convert to list
             logger.debug(result)
 
         except serializer.DeserializeError:
@@ -224,19 +254,21 @@ class Server:
 
         return result
 
-    def hover(self, params):
+    def hover(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Fetch help
+
+        Return:
+            formatted help object
+        """
+
         try:
             cparam = serializer.HoverParams.deserialize(params)
             src = cparam.src
             line = cparam.line
             character = cparam.character
-
             hovr = hover.Hover(src, line, character)
             logger.debug(
-                "line: %s\ncharacter: %s\nsrc +++++ \n%s",
-                line,
-                character,
-                src,
+                "line: %s\ncharacter: %s\nsrc +++++ \n%s", line, character, src,
             )
 
             project = None if not self.workspace else hovr.project(self.workspace.path)
@@ -255,7 +287,9 @@ class Server:
 
         return result
 
-    def change_workspace_config(self, params):
+    def change_workspace_config(self, params: Dict[str, Any]) -> Optional[Any]:
+        """Update workspace config"""
+
         try:
             workspace = serializer.WorkspaceParams.deserialize(params)
 
@@ -271,15 +305,21 @@ class Server:
 
         return None
 
-    def format_(self, params):
+    def format_(self, params: Dict[str, Any]) -> Optional[List[Dict[str, Any]]]:
+        """Format source
+
+        Return:
+            changes formatted source object
+        """
+
         try:
             cparam = serializer.FormattingParams.deserialize(params)
             src = cparam.src
 
             fmt = formatting.Formatting(src)
             logger.debug("src +++++ \n%s", fmt.src)
-            result = fmt.format_code()
-            result = list(result)
+            i_result: Iterable = fmt.format_code()
+            result: List = list(i_result)
             logger.debug(result)
 
         except serializer.DeserializeError:
@@ -295,7 +335,7 @@ class Server:
         return result
 
 
-def main():
+def main() -> None:
     svr = Server(port=2048)
     svr.set_command("exit", svr.exit)
     svr.set_command("ping", svr.ping)

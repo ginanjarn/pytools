@@ -44,13 +44,13 @@ class ParseError(Exception):
 
 
 class IDInvalidError(Exception):
-    """Unable to get ID"""
+    """Unable to get message ID"""
 
     ...
 
 
 class MethodInvalidError(Exception):
-    """Unable to get METHOD"""
+    """Unable to get request METHOD"""
 
     ...
 
