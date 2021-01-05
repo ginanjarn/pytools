@@ -1,5 +1,5 @@
-import sublime
-import sublime_plugin
+import sublime  # type: ignore
+import sublime_plugin   # type: ignore
 import os
 import re
 import logging
