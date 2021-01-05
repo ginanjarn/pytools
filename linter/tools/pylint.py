@@ -2,8 +2,12 @@ import os
 import subprocess
 import re
 import logging
-# from typing import Any, Iterator, List, Tuple, Optional, Dict
 
+try:
+    # required for typing inspection
+    from typing import Any, Iterator, List, Tuple, Optional, Dict
+except ImportError:
+    ...
 
 logger = logging.getLogger(__name__)
 # logger.setLevel(logging.DEBUG)
@@ -29,19 +33,16 @@ class Pylint:
     """Pylint handler"""
 
     @staticmethod
-    def lint(module: str, *args: str, sys_env: "Optional[Dict[str, str]]" = None) -> str:
+    def lint(
+        module: str, *args: str, sys_env: "Optional[Dict[str, str]]" = None
+    ) -> str:
         try:
-            options = "" if not args else " ".join(args)    # type : str
+            options = "" if not args else " ".join(args)  # type : str
             cmd = ["pylint", "--exit-zero", "--score=n", options, module]
 
-            env = None  # type : "Optional[Dict[str, str]]"
-            if not sys_env:  # for str
-                env = os.environ.copy()  # use current system env
-            else:
-                env = sys_env
+            # default use system env
+            env = sys_env if sys_env else os.environ.copy()
 
-            # logger.debug(cmd)
-            # logger.debug(env)
             if os.name == "nt":
                 # linux subprocess module does not have STARTUPINFO
                 # so only use it if on Windows
@@ -67,7 +68,7 @@ class Pylint:
                     env=env,
                     bufsize=-1,
                 )
-        except Exception as err:
+        except OSError as err:
             raise CommandError from err
 
         sout, serr = lint_proc.communicate()
@@ -91,8 +92,11 @@ def lint(
     # logger.debug(env)
     template = "@@ {C}: {msg_id}: {module}:{line}:{column}: {msg} @@"
     re_pattern = r"@@ (\w): (\w+): (.*):(\d*):(\d*): (.*) @@\s"
-    output = Pylint.lint(module, "--msg-template=%s" % (template), sys_env=env)  # type : str
-    messages = re.findall(re_pattern, output)   # type : "List[Tuple[str, str, str, str, str, str]]"
+    output = Pylint.lint(
+        module, "--msg-template=%s" % (template), sys_env=env
+    )  # type : str
+
+    messages = re.findall(re_pattern, output)
     severity_map = {
         "R": HINT,
         "C": INFORMATION,
@@ -100,6 +104,7 @@ def lint(
         "E": ERROR,
         "F": ERROR,
     }
+
     for message in messages:
         yield (
             severity_map[message[0]],

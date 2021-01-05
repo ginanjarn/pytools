@@ -5,7 +5,7 @@ import os
 import threading
 import sublime  # pylint: disable=import-error
 import sublime_plugin  # pylint: disable=import-error
-from .linter import Marker
+from .linter import Marker, CommandError  # type: ignore
 
 
 logger = logging.getLogger(__name__)
@@ -28,8 +28,9 @@ def get_sysenv():
     return env
 
 
-MARKER = None   # type: Marker
+MARKER = None  # type: Marker
 LOADED = False
+
 
 def plugin_loaded():
     global MARKER
@@ -47,8 +48,10 @@ class PytoolsLintCommand(sublime_plugin.TextCommand):
     def lint(self):
         view = self.view
         env = get_sysenv()
-        # logger.debug(env)
-        MARKER.lint(view, env)
+        try:
+            MARKER.lint(view, env)
+        except CommandError:
+            sublime.error_message("Linter error.\nPylint not in path.")
 
 
 class Linter(sublime_plugin.EventListener):
@@ -58,4 +61,4 @@ class Linter(sublime_plugin.EventListener):
 
     def on_post_save_async(self, view):
         MARKER.clear_view(view)
-        pass
+        ...
