@@ -29,19 +29,21 @@ def get_sysenv():
 
 
 MARKER = None  # type: Marker
-LOADED = False
 
 
 def plugin_loaded():
     global MARKER
-    global LOADED
     MARKER = Marker()
     LOADED = True
 
 
+def source_valid(view):
+    return view.match_selector(0, "source.python")
+
+
 class PytoolsLintCommand(sublime_plugin.TextCommand):
     def run(self, edit):
-        if LOADED:
+        if source_valid(self.view):
             thread = threading.Thread(target=self.lint)
             thread.start()
 
@@ -56,9 +58,14 @@ class PytoolsLintCommand(sublime_plugin.TextCommand):
 
 class Linter(sublime_plugin.EventListener):
     def on_hover(self, view, point, hover_zone):
-        if hover_zone == sublime.HOVER_GUTTER:
-            MARKER.get_message(view, point)
+        if source_valid(view):
+            if hover_zone == sublime.HOVER_GUTTER:
+                MARKER.get_message(view, point)
 
     def on_post_save_async(self, view):
-        MARKER.clear_view(view)
-        ...
+        if source_valid(view):
+            MARKER.clear_view(view)
+
+    def on_close(self, view):
+        if source_valid(view):
+            MARKER.clear_view(view)
