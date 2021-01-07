@@ -4,8 +4,8 @@ import subprocess
 import threading
 import os
 import logging
-from .langserver.client.service_v2 import Client  # pylint: disable=relative-beyond-top-level
-from .langserver.client.sublimetext import completion, hover, formatting  # pylint: disable=relative-beyond-top-level
+from .editing_tools.client.service_v2 import Client  # pylint: disable=relative-beyond-top-level
+from .editing_tools.client.sublimetext import completion, hover, formatting  # pylint: disable=relative-beyond-top-level
 
 logger = logging.getLogger(__name__)
 # logger.setLevel(logging.DEBUG)
