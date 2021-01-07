@@ -3,6 +3,8 @@
 THIS MODULE IS COPY OF server.service.serializer MODULE
 """
 
+# from typing import Dict, Any
+
 
 class DeserializeError(Exception):
     """Unable to deserialize content"""
@@ -10,17 +12,17 @@ class DeserializeError(Exception):
     ...
 
 
-class Workspace:
-    def __init__(self, path):
+class WorkspaceParams:
+    def __init__(self, path: str) -> None:
         self.path = path
 
     @staticmethod
-    def serialize(path):
+    def serialize(path: str) -> "Dict[str, Any]":
         params = {"path": path}
         return params
 
     @classmethod
-    def deserialize(cls, params):
+    def deserialize(cls, params: "Dict[str, Any]") -> "WorkspaceParams":
         try:
             path = params["path"]
         except Exception:
@@ -28,14 +30,14 @@ class Workspace:
         return cls(path)
 
 
-class Completion:
-    def __init__(self, src, line, character):
+class CompletionParams:
+    def __init__(self, src: str, line: int, character: int) -> None:
         self.src = src
         self.line = line
         self.character = character
 
     @staticmethod
-    def serialize(src, line, character):
+    def serialize(src: str, line: int, character: int) -> "Dict[str, Any]":
         # Line position in a document (zero-based).
         params = {
             "textDocument": {"uri": src},
@@ -44,7 +46,7 @@ class Completion:
         return params
 
     @classmethod
-    def deserialize(cls, params):
+    def deserialize(cls, params: "Dict[str, Any]") -> "CompletionParams":
         try:
             src = params["textDocument"]["uri"]
             line = params["position"]["line"]
@@ -56,14 +58,14 @@ class Completion:
         return cls(src, line, character)
 
 
-class Hover:
-    def __init__(self, src, line, character):
+class HoverParams:
+    def __init__(self, src: str, line: int, character: int) -> None:
         self.src = src
         self.line = line
         self.character = character
 
     @staticmethod
-    def serialize(src, line, character):
+    def serialize(src: str, line: int, character: int) -> "Dict[str, Any]":
         # Line position in a document (zero-based).
         params = {
             "textDocument": {"uri": src},
@@ -72,7 +74,7 @@ class Hover:
         return params
 
     @classmethod
-    def deserialize(cls, params):
+    def deserialize(cls, params: "Dict[str, Any]") -> "HoverParams":
         try:
             src = params["textDocument"]["uri"]
             line = params["position"]["line"]
@@ -84,17 +86,17 @@ class Hover:
         return cls(src, line, character)
 
 
-class Formatting:
-    def __init__(self, src):
+class FormattingParams:
+    def __init__(self, src: str) -> None:
         self.src = src
 
     @staticmethod
-    def serialize(src):
+    def serialize(src: str) -> "Dict[str, Any]":
         params = {"textDocument": {"uri": src}}
         return params
 
     @classmethod
-    def deserialize(cls, params):
+    def deserialize(cls, params: "Dict[str, Any]") -> "FormattingParams":
         try:
             src = params["textDocument"]["uri"]
         except Exception:

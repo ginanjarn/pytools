@@ -1,5 +1,8 @@
+"""Server module"""
+
 import socket
 import logging
+from typing import Union, Dict, Any, Callable, Optional, List, Iterable
 import rpc
 import service.completion_v2 as completion
 import service.hover_v2 as hover
@@ -69,18 +72,92 @@ class ServerErrorEnd(Exception):
 class Server:
     """Server"""
 
-    def __init__(self, host=None, port=None):
+    def __init__(self, host: str = None, port: int = None) -> None:
         self.host = host
         self.port = port
 
         self.wait_next = True
-        self.command = {}
+        self.command: Dict[str, Callable[[Any], Optional[Any]]] = {}
 
+        self.capability: Dict[str, Any] = {}
+        self.workspace: Optional[serializer.WorkspaceParams] = None
 
-        self.capability = {}
-        self.workspace: serializer.Workspace = None
+    def add_capability(self, capability: Dict[str, Any]) -> None:
+        """Add implemented capability"""
 
-    def listen(self, host=None, port=None, buffer_size=1024):
+        self.capability.update(capability)
+
+    def set_command(self, name: str, function: Callable[[Dict[str, Any]], Any]) -> None:
+        """Set command map"""
+
+        self.command[name] = function
+
+    def run_command(
+        self, method: str, params: Optional[Dict[str, Any]]
+    ) -> Optional[Any]:
+        """Execute mapped command"""
+
+        func = self.command.get(method, None)
+        if not func:  # for object
+            raise MethodNotFound
+
+        results = func(params)
+        return results
+
+    def process(self, data: str) -> str:
+        """Process request data"""
+
+        logger.debug(data)
+        pid: Union[int, str] = -1
+        resp_msg: rpc.ResponseMessage
+
+        try:
+            req_msg: rpc.RequestMessage = rpc.RequestMessage().parse(data)
+            pid = req_msg.id
+            results = self.run_command(req_msg.method, req_msg.params)
+            err_msg = rpc.ResponseError(code=0)
+            resp_msg = rpc.ResponseMessage().create(pid, results, err_msg.error)
+
+        except rpc.ParseError:
+            logger.exception("unable parse json", exc_info=True)
+            err_msg = rpc.ResponseError(PARSE_ERROR)
+            resp_msg = rpc.ResponseMessage().create(pid, None, err_msg.error)
+
+        except rpc.IDInvalidError:
+            logger.exception("unable get ID", exc_info=True)
+            err_msg = rpc.ResponseError(INVALID_REQUEST)
+            resp_msg = rpc.ResponseMessage().create(pid, None, err_msg.error)
+
+        except rpc.MethodInvalidError:
+            logger.exception("unable get method", exc_info=True)
+            err_msg = rpc.ResponseError(INVALID_REQUEST)
+            resp_msg = rpc.ResponseMessage().create(pid, None, err_msg.error)
+
+        except MethodNotFound:
+            logger.exception("method not found")
+            err_msg = rpc.ResponseError(METHOD_NOT_FOUND)
+            logger.debug(err_msg.error)
+            resp_msg = rpc.ResponseMessage().create(pid, None, err_msg.error)
+
+        except InvalidParams:
+            logger.exception("invalid params")
+            err_msg = rpc.ResponseError(INVALID_PARAMS)
+            logger.debug(err_msg.error)
+            resp_msg = rpc.ResponseMessage().create(pid, None, err_msg.error)
+
+        except InternalError:
+            logger.exception("internal error")
+            err_msg = rpc.ResponseError(INTERNAL_ERROR)
+            logger.debug(err_msg.error)
+            resp_msg = rpc.ResponseMessage().create(pid, None, err_msg.error)
+
+        return str(resp_msg)
+
+    def listen(
+        self, host: str = None, port: int = None, buffer_size: int = 1024
+    ) -> None:
+        """Socket listener"""
+
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
 
             host = "127.0.0.1" if host is None else host
@@ -111,91 +188,58 @@ class Server:
                 result = self.process(content)
                 conn.sendall(rpc.encode(result))
 
-    def loop(self, buffer_size=1024):
+    def loop(self, buffer_size: int = 1024) -> None:
+        """main loop"""
+
         while True:
             if self.wait_next:
                 self.listen(self.host, self.port, buffer_size)
             else:
                 break
 
-    def set_command(self, name, function):
-        self.command[name] = function
+    def ping(self, params: Optional[Any] = None) -> Any:
+        """Ping test"""
 
-    def run_command(self, method, params):
-        func = self.command.get(method, None)
-        if not func:  # for object
-            raise MethodNotFound
-
-        results = func(params)
-        return results
-
-    def process(self, data: str):
-        logger.debug(data)
-        pid = -1
-
-        try:
-            req_msg = rpc.RequestMessage().parse(data)
-            pid = req_msg.id
-            results = self.run_command(req_msg.method, req_msg.params)
-            err_msg = rpc.ResponseError(code=0)
-            resp_msg = rpc.ResponseMessage().create(pid, results, err_msg.error)
-
-        except rpc.ParseError:
-
-            logger.exception("unable parse json", exc_info=True)
-            err_msg = rpc.ResponseError(PARSE_ERROR)
-            resp_msg = rpc.ResponseMessage().create(pid, None, err_msg.error)
-
-        except MethodNotFound:
-            logger.exception("method not found")
-            err_msg = rpc.ResponseError(METHOD_NOT_FOUND)
-            logger.debug(err_msg.error)
-            resp_msg = rpc.ResponseMessage().create(pid, None, err_msg.error)
-
-        except InvalidParams:
-            logger.exception("invalid params")
-            err_msg = rpc.ResponseMessage(INVALID_PARAMS)
-            logger.debug(err_msg.error)
-            resp_msg = rpc.ResponseMessage().create(pid, None, err_msg.error)
-
-        except InternalError:
-            logger.exception("internal error")
-            err_msg = rpc.ResponseError(INTERNAL_ERROR)
-
-            logger.debug(err_msg.error)
-            resp_msg = rpc.ResponseMessage().create(pid, None, err_msg.error)
-
-        return str(resp_msg)
-
-    def add_capability(self, capability):
-        self.capability.update(capability)
-
-    def ping(self, params=None):
         logger.info("ping test")
         return params
 
-    def initialize(self, params=None):
+    def initialize(self, params: Optional[Any] = None) -> Dict[str, Any]:
+        """Initialize
+
+        Return
+            capability
+        """
+
         logger.info("initialize")
         return self.capability
 
-    def exit(self, params=None):
+    def exit(self, params: Optional[Any] = None) -> Optional[Any]:
+        """Exit services"""
+
         logger.info("exiting")
         self.wait_next = False
         return None
 
-    def complete(self, params):
+    def complete(self, params: Dict[str, Any]) -> Optional[List[Dict[str, Any]]]:
+        """Fetch completion
+
+        Return:
+            completion list object
+        """
+
         try:
-            cmpl = completion.Completion(params)
+            cparam = serializer.CompletionParams.deserialize(params)
+            src = cparam.src
+            line = cparam.line
+            character = cparam.character
+            cmpl = completion.Completion(src, line, character)
             logger.debug(
-                "line: %s\ncharacter: %s\nsrc +++++ \n%s",
-                cmpl.line,
-                cmpl.character,
-                cmpl.src,
+                "line: %s\ncharacter: %s\nsrc +++++ \n%s", line, character, src,
             )
 
             project = None if not self.workspace else cmpl.project(self.workspace.path)
-            result = cmpl.complete(project=project)
-            result = list(result)  # convert to list
+            i_result: Iterable = cmpl.complete(project=project)
+            result: List = list(i_result)  # convert to list
             logger.debug(result)
 
         except serializer.DeserializeError:
@@ -210,16 +254,21 @@ class Server:
 
         return result
 
-    def hover(self, params):
+    def hover(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Fetch help
+
+        Return:
+            formatted help object
+        """
+
         try:
-
-            hovr = hover.Hover(params)
-
+            cparam = serializer.HoverParams.deserialize(params)
+            src = cparam.src
+            line = cparam.line
+            character = cparam.character
+            hovr = hover.Hover(src, line, character)
             logger.debug(
-                "line: %s\ncharacter: %s\nsrc +++++ \n%s",
-                hovr.line,
-                hovr.character,
-                hovr.src,
+                "line: %s\ncharacter: %s\nsrc +++++ \n%s", line, character, src,
             )
 
             project = None if not self.workspace else hovr.project(self.workspace.path)
@@ -238,9 +287,11 @@ class Server:
 
         return result
 
-    def change_workspace_config(self, params):
+    def change_workspace_config(self, params: Dict[str, Any]) -> Optional[Any]:
+        """Update workspace config"""
+
         try:
-            workspace = serializer.Workspace.deserialize(params)
+            workspace = serializer.WorkspaceParams.deserialize(params)
 
             self.workspace = workspace
             logger.debug(self.workspace.path)
@@ -254,12 +305,21 @@ class Server:
 
         return None
 
-    def format_(self, param):
+    def format_(self, params: Dict[str, Any]) -> Optional[List[Dict[str, Any]]]:
+        """Format source
+
+        Return:
+            changes formatted source object
+        """
+
         try:
-            fmt = formatting.Formatting(param)
+            cparam = serializer.FormattingParams.deserialize(params)
+            src = cparam.src
+
+            fmt = formatting.Formatting(src)
             logger.debug("src +++++ \n%s", fmt.src)
-            result = fmt.format_code()
-            result = list(result)
+            i_result: Iterable = fmt.format_code()
+            result: List = list(i_result)
             logger.debug(result)
 
         except serializer.DeserializeError:
@@ -275,7 +335,7 @@ class Server:
         return result
 
 
-def main():
+def main() -> None:
     svr = Server(port=2048)
     svr.set_command("exit", svr.exit)
     svr.set_command("ping", svr.ping)

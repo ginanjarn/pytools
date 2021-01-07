@@ -1,8 +1,12 @@
+"""Document formatting"""
+
+
 import logging
 import difflib
 import re
 import os
 import subprocess
+from typing import Dict, Tuple, Any, List, Iterator, Union
 
 
 logger = logging.getLogger("formatting")
@@ -17,13 +21,12 @@ FORMATTING_CAPABLE = True
 
 
 try:
-    import black
-    from . import serializer
+    import black  # type: ignore
 except ModuleNotFoundError:
     FORMATTING_CAPABLE = False
 
 
-def capability():
+def capability() -> Dict[str, Any]:
     return {"documentFormattingProvider": FORMATTING_CAPABLE}
 
 
@@ -34,11 +37,10 @@ class FormattingError(Exception):
 
 
 class Formatting:
-    def __init__(self, params):
-        cparam = serializer.Formatting.deserialize(params)
-        self.src = cparam.src
+    def __init__(self, src: str) -> None:
+        self.src = src
 
-    def format_code(self, src=None):
+    def format_code(self) -> List[Dict[str, Any]]:
         try:
             black_cmd = ["python", "-m", "black", "-"]
             env = os.environ.copy()
@@ -78,7 +80,7 @@ class Formatting:
 
         return result
 
-    def get_removed(self, param):
+    def get_removed(self, param: str) -> Tuple[int, int]:
         rmstr = re.findall(r"@@\s\-(\d*),(\d*)\s.*@@", param)
         if not rmstr:
             raise ValueError("unable to parse")
@@ -86,21 +88,24 @@ class Formatting:
         end = int(rmstr[0][1]) + start - 1
         return start, end
 
-    def extract_updated(self, old_src, new_src) -> any:
-        old_src = old_src.splitlines()
-        new_src = new_src.splitlines()
-        diff = difflib.unified_diff(old_src, new_src)
+    def extract_updated(self, old_src: str, new_src: str) -> List[Dict[str, Any]]:
+        old_srcs: List[str] = old_src.splitlines()
+        new_srcs: List[str] = new_src.splitlines()
+        diff: Iterator[str] = difflib.unified_diff(old_srcs, new_srcs)
         text_edit_list = []
-        sub = ()
+
+        # logger.debug(old_srcs)
+        # logger.debug(new_srcs)
+
         index = -1
         for line in diff:
+            logger.debug(">>%s", line)
             if line.startswith("@"):
                 index += 1
-                text_edit = {}
 
                 st, ed = self.get_removed(line)
                 start = {"line": st, "character": 0}
-                end = {"line": ed, "character": len(old_src[ed - 1])}
+                end = {"line": ed, "character": len(old_srcs[ed - 1])}
                 text_edit_list.append(
                     {"range": {"start": start, "end": end}, "newText": ""}
                 )
@@ -108,9 +113,12 @@ class Formatting:
                 continue
             else:
                 try:
-                    text_edit_list[index]["newText"] = "\n".join(
-                        [text_edit_list[index]["newText"], line[1:]]
-                    )
+                    cached: Union[str, Any] = text_edit_list[index]["newText"]
+                    if not cached:  # for str
+                        text_edit_list[index]["newText"] = line[1:]
+                    else:
+                        text_edit_list[index]["newText"] = "\n".join([cached, line[1:]])
                 except IndexError:
                     continue
+        logger.debug(text_edit_list)
         return text_edit_list

@@ -2,6 +2,7 @@
 
 import logging
 import html
+from typing import Iterator, Dict, Any
 
 
 logger = logging.getLogger("hover")
@@ -16,13 +17,12 @@ HOVER_CAPABLE = True
 
 
 try:
-    from jedi import Script, Project
-    from . import serializer
+    from jedi import Script, Project  # type: ignore
 except ModuleNotFoundError:
     HOVER_CAPABLE = False
 
 
-def capability():
+def capability() -> Dict[str, Any]:
     return {"hoverProvider": HOVER_CAPABLE}
 
 
@@ -33,18 +33,17 @@ class HoverError(Exception):
 
 
 class Hover:
-    def __init__(self, params):
-        cparam = serializer.Hover.deserialize(params)
-        self.src = cparam.src
-        self.line = cparam.line
-        self.character = cparam.character
+    def __init__(self, src: str, line: int, character: int) -> None:
+        self.src = src
+        self.line = line
+        self.character = character
 
     @staticmethod
-    def project(path):
+    def project(path: str) -> "Project":
         proj = Project(path=path)
         return proj
 
-    def hover(self, project=None):
+    def hover(self, project: "Project" = None) -> Dict[str, Any]:
         """Get documentation
 
         Return:
@@ -58,22 +57,22 @@ class Hover:
 
             if result:  # for list
                 prebuit_doc = self.build_doc(result[0])
-                prebuit_doc = "".join(prebuit_doc)
+                docs = "".join(prebuit_doc)
             else:
-                prebuit_doc = ""
+                docs = ""
         except Exception:
             raise HoverError from None
 
-        return {"contents": {"language": "html", "value": prebuit_doc}}
+        return {"contents": {"language": "html", "value": docs}}
 
-    def build_doc(self, data):
+    def build_doc(self, data) -> Iterator[str]:
         try:
-            type_ = data.type
-            name = data.name
+            type_: str = data.type
+            name: str = data.name
 
             logger.debug("doc type= %s, name= %s", type_, name)
 
-            def get_header():
+            def get_header() -> str:
                 if type_ == "keyword":
                     header = "%s %s" % (type_, name)
                 else:
@@ -87,19 +86,19 @@ class Hover:
                     logger.debug(header)
                 return header
 
-            def get_docstring():
+            def get_docstring() -> str:
                 if type_ in ["class", "function"]:
                     doc = data.docstring(raw=False)
                 else:
                     doc = data.docstring(raw=True)
 
-                doc = html.escape(doc, quote=False)
-                return doc
+                safe_doc: str = html.escape(doc, quote=False)
+                return safe_doc
 
-            def wrap_paragraph(line):
+            def wrap_paragraph(line: str) -> str:
                 return "<p>%s</p>" % (line)
 
-            def wrap_line_break(content):
+            def wrap_line_break(content: str) -> str:
                 lines = content.split("\n")
                 return "<br>".join(lines)
 
