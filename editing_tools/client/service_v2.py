@@ -196,6 +196,7 @@ class Client:
         self.exit()
         self.capability = None
         self.server_valid = None
+        self.cached_workspace = None
 
     @property
     def _req_id(self):
@@ -259,7 +260,7 @@ class Client:
             if not capable:
                 raise ServiceUnavailable
 
-            params = serializer.Completion.serialize(source, line, character)
+            params = serializer.CompletionParams.serialize(source, line, character)
             msg = rpc.RequestMessage().create(
                 self._req_id, "textDocument/completion", params
             )
@@ -282,7 +283,7 @@ class Client:
             if not capable:
                 raise ServiceUnavailable
 
-            params = serializer.Hover.serialize(source, line, character)
+            params = serializer.HoverParams.serialize(source, line, character)
             msg = rpc.RequestMessage().create(
                 self._req_id, "textDocument/hover", params
             )
@@ -298,7 +299,7 @@ class Client:
             logger.exception("hover exception", exc_info=True)
 
     def set_workspace_config(self, path=""):
-        workspace = serializer.Workspace.serialize(path=path)
+        workspace = serializer.WorkspaceParams.serialize(path=path)
         if self.cached_workspace != workspace:
             self.cached_workspace = workspace
 
@@ -319,7 +320,7 @@ class Client:
             capable = self.capability["documentFormattingProvider"]
             if not capable:
                 raise ServiceUnavailable
-            params = serializer.Formatting.serialize(source)
+            params = serializer.FormattingParams.serialize(source)
             msg = rpc.RequestMessage().create(
                 self._req_id, "textDocument/formatting", params
             )

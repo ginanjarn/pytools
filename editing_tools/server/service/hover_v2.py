@@ -2,6 +2,7 @@
 
 import logging
 import html
+from typing import Iterator, Dict, Any
 
 
 logger = logging.getLogger("hover")
@@ -16,13 +17,12 @@ HOVER_CAPABLE = True
 
 
 try:
-    from jedi import Script, Project
-    from . import serializer
+    from jedi import Script, Project  # type: ignore
 except ModuleNotFoundError:
     HOVER_CAPABLE = False
 
 
-def capability():
+def capability() -> Dict[str, Any]:
     return {"hoverProvider": HOVER_CAPABLE}
 
 
@@ -33,52 +33,46 @@ class HoverError(Exception):
 
 
 class Hover:
-    def __init__(self, params):
+    def __init__(self, src: str, line: int, character: int) -> None:
+        self.src = src
+        self.line = line
+        self.character = character
+
+    @staticmethod
+    def project(path: str) -> "Project":
+        proj = Project(path=path)
+        return proj
+
+    def hover(self, project: "Project" = None) -> Dict[str, Any]:
+        """Get documentation
+
+        Return:
+            documentation object"""
         try:
-            cparam = serializer.Hover.deserialize(params)
-            self.src = cparam.src
-            self.line = cparam.line
-            self.character = cparam.character
-        except serializer.DeserializeError:
-            logger.exception("deserialize error", exc_info=True)
-            raise serializer.DeserializeError from None
-
-    def project(self, path):
-        p = Project(path=path)
-        return p
-
-    def hover(self, src=None, line=None, character=None, project=None):
-        if src is not None:
-            self.src = src
-        if line is not None:
-            self.line = line
-        if character is not None:
-            self.character = character
-
-        try:
-            c = Script(source=self.src, project=project)
-            result = c.help(self.line, self.character)
+            script = Script(source=self.src, project=project)
+            result = script.help(self.line, self.character)
 
             logger.debug(self.src)
             logger.debug("line = %s, character = %s", self.line, self.character)
-            if len(result) > 0:
+
+            if result:  # for list
                 prebuit_doc = self.build_doc(result[0])
-                prebuit_doc = "".join(prebuit_doc)
+                docs = "".join(prebuit_doc)
             else:
-                prebuit_doc = ""
+                docs = ""
         except Exception:
             raise HoverError from None
 
-        return {"contents": {"language": "html", "value": prebuit_doc}}
+        return {"contents": {"language": "html", "value": docs}}
 
-    def build_doc(self, data):
+    def build_doc(self, data) -> Iterator[str]:
         try:
-            type_ = data.type
-            name = data.name
+            type_: str = data.type
+            name: str = data.name
 
             logger.debug("doc type= %s, name= %s", type_, name)
 
-            def get_header():
+            def get_header() -> str:
                 if type_ == "keyword":
                     header = "%s %s" % (type_, name)
                 else:
@@ -92,27 +86,20 @@ class Hover:
                     logger.debug(header)
                 return header
 
-            def docstring():
+            def get_docstring() -> str:
                 if type_ in ["class", "function"]:
                     doc = data.docstring(raw=False)
                 else:
                     doc = data.docstring(raw=True)
 
-                doc = html.escape(doc, quote=False)
-                return doc
+                safe_doc: str = html.escape(doc, quote=False)
+                return safe_doc
 
-            def split_p(src):
-                return src.split("\n\n")
-
-            def wrap_p(line):
+            def wrap_paragraph(line: str) -> str:
                 return "<p>%s</p>" % (line)
 
-            def split_br(src):
-                return src.split("\n")
-
-            def join_br(lines):
-                if not isinstance(lines, list):
-                    raise TypeError
+            def wrap_line_break(content: str) -> str:
+                lines = content.split("\n")
                 return "<br>".join(lines)
 
             if type_ == "keyword":
@@ -120,13 +107,12 @@ class Hover:
                 yield get_header()
             else:
                 yield get_header()
-                doc = docstring()
-                if doc != "":
-                    paragraphs = split_p(doc)
-                    for par in paragraphs:
-                        lines = split_br(par)
-                        par_body = join_br(lines)
-                        yield wrap_p(par_body)
+                doc = get_docstring()
+                if doc:  # for string
+                    paragraphs = doc.split("\n\n")
+                    for paragraph in paragraphs:
+                        body = wrap_line_break(paragraph)
+                        yield wrap_paragraph(body)
 
         except Exception:
             logger.exception("some wrong", exc_info=True)
