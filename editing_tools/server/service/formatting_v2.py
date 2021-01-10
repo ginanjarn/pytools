@@ -89,8 +89,8 @@ class Formatting:
         return start, end
 
     def extract_updated(self, old_src: str, new_src: str) -> List[Dict[str, Any]]:
-        old_srcs: List[str] = old_src.splitlines()
-        new_srcs: List[str] = new_src.splitlines()
+        old_srcs: List[str] = old_src.splitlines(keepends=True)
+        new_srcs: List[str] = new_src.splitlines(keepends=True)
         diff: Iterator[str] = difflib.unified_diff(old_srcs, new_srcs)
         text_edit_list = []
 
@@ -117,7 +117,7 @@ class Formatting:
                     if not cached:  # for str
                         text_edit_list[index]["newText"] = line[1:]
                     else:
-                        text_edit_list[index]["newText"] = "\n".join([cached, line[1:]])
+                        text_edit_list[index]["newText"] = "".join([cached, line[1:]])
                 except IndexError:
                     continue
         logger.debug(text_edit_list)
