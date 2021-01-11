@@ -4,10 +4,11 @@
 import logging
 import os
 import sublime  # pylint: disable=import-error
-from .tools import pylint as pylint # type: ignore
+from .tools import pylint as pylint  # type: ignore
 
 try:
     # required for typing inspection
+
     from typing import List, Iterator, Optional, Dict, Any
 except ImportError:
     ...

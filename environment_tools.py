@@ -1,9 +1,10 @@
-import sublime  # type: ignore
-import sublime_plugin   # type: ignore
+import abc
+import logging
 import os
 import re
-import logging
 import random
+import sublime  # type: ignore
+import sublime_plugin  # type: ignore
 
 logger = logging.getLogger(__name__)
 # logger.setLevel(logging.DEBUG)
@@ -24,24 +25,29 @@ CONDA = 0
 VENV = 1
 
 
-class Manager:
+class Manager(metaclass=abc.ABCMeta):
     @staticmethod
+    @abc.abstractmethod
     def validate(path):
         pass
 
     @staticmethod
+    @abc.abstractmethod
     def make_setting_property(path):
         pass
 
     @staticmethod
+    @abc.abstractmethod
     def setup(settings, path):
         pass
 
     @staticmethod
+    @abc.abstractmethod
     def env_list(settings):
         pass
 
     @staticmethod
+    @abc.abstractmethod
     def remove(settings, env_id):
         pass
 

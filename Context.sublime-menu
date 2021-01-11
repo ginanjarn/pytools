@@ -1,7 +1,5 @@
 [
-	{
-		"caption": "-"
-	},
+	{ "caption": "-", "id": "pytools-terminal" },
 	{
 		"caption": "Open Terminal Here...",
 		"command": "pytools_openterminal"
