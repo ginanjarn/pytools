@@ -136,6 +136,6 @@ def documentation_to_rpc(names: List[JediName]) -> Dict[str, Any]:
             )
             return f"<div>{result}</div>"
 
-    result = {"content": build_documentation(names[0])}
+    result = {"content": build_documentation(names[0]) if names else ""}
     LOGGER.debug("result: %s", result)
     return result
