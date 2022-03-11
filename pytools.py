@@ -113,6 +113,10 @@ class PytoolsRunServerCommand(sublime_plugin.ApplicationCommand):
         command = environment.get_python_exec_command(interpreter, server)
         workdir = os.path.dirname(__file__)
 
+        thread = Thread(target=self.run_server, args=(command, workdir))
+        thread.start()
+
+    def run_server(self, command, workdir):
         try:
             client.run_server(command, workdir)
         finally:
