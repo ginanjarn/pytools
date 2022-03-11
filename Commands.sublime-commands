@@ -8,4 +8,6 @@
 	{"caption":"Pytools: Clean diagnostic","command":"pytools_clean_diagnostic"},
 
 	{"caption":"Pytools: Open terminal","command":"pytools_open_terminal"},
+	{"caption":"Pytools: Open terminal here...","command":"pytools_open_terminal","args":{"current_file_directory":true}},
+	{"caption":"Pytools: Change terminal emulator","command":"pytools_change_terminal_emulator"},
 ]

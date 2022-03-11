@@ -839,15 +839,69 @@ class EventListener(sublime_plugin.EventListener):
 
 
 class PytoolsOpenTerminalCommand(sublime_plugin.TextCommand):
-    def run(self, edit: sublime.Edit):
-        cwd = get_workspace_path(self.view) or None
-        command = ["cmd"]
+    """open terminal"""
+
+    def run(self, edit: sublime.Edit, current_file_directory=False):
+
+        # TODO: implement for posix
+
+        emulator = settings.BASE_SETTING.get(settings.TERMINAL_EMULATOR)
+        emulator = emulator if emulator else "cmd"
+        command = [emulator]
+
+        if current_file_directory:
+            LOGGER.debug("open in current file directory")
+            workdir = os.path.dirname(self.view.file_name())
+        else:
+            workdir = get_workspace_path(self.view) or None
+
+        if not is_python_code(self.view):
+            # bypass activate python environment
+            self.open_terminal(command, workdir)
+            return
 
         interpreter = settings.BASE_SETTING.get(settings.INTERPRETER)
         if interpreter:
             activate_command = environment.get_envs_activate_command(interpreter)
-            command = command + ["/K"] + activate_command.split()
-            # command = command + ["/K"] + activate_command.split() + ["&&", "powershell"]
+            command_map = {
+                "cmd": ["cmd", "/K"] + activate_command.split(),
+                "powershell": ["cmd", "/K"]
+                + activate_command.split()
+                + ["&&", "powershell"],
+            }
+            command = command_map[emulator]
 
         LOGGER.debug(command)
-        subprocess.Popen(command, cwd=cwd)
+
+        self.open_terminal(command, workdir)
+
+    def open_terminal(self, command, workdir=None):
+        subprocess.Popen(command, cwd=workdir)
+
+
+class PytoolsChangeTerminalEmulatorCommand(sublime_plugin.WindowCommand):
+    """open settings"""
+
+    def run(self, open_default=False):
+
+        # TODO: implement for posix
+
+        window: sublime.Window = self.window
+        items = ["cmd", "powershell"]
+
+        def on_select(index=-1):
+            if index > -1:
+                settings.BASE_SETTING.set(settings.TERMINAL_EMULATOR, items[index])
+
+        try:
+            current = settings.BASE_SETTING.get(settings.TERMINAL_EMULATOR)
+            index = items.index(current)
+        except ValueError:
+            index = 0
+
+        window.show_quick_panel(
+            items,
+            on_select=on_select,
+            flags=sublime.KEEP_OPEN_ON_FOCUS_LOST,
+            selected_index=index,
+        )
