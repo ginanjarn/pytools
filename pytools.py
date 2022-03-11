@@ -109,6 +109,9 @@ class PytoolsRunServerCommand(sublime_plugin.ApplicationCommand):
             sublime.run_command("pytools_change_interpreter")
             return
 
+        self.view: sublime.View = sublime.active_window().active_view()
+        self.view.set_status("status_key", "RUNNING SERVER")
+
         server = r"server\app.py"
         command = environment.get_python_exec_command(interpreter, server)
         workdir = os.path.dirname(__file__)
@@ -120,6 +123,7 @@ class PytoolsRunServerCommand(sublime_plugin.ApplicationCommand):
         try:
             client.run_server(command, workdir)
         finally:
+            self.view.erase_status("status_key")
             sublime.status_message("finish running server")
 
 
