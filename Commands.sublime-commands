@@ -1,0 +1,13 @@
+[
+	{"caption":"Pytools: Change python interpreter","command":"pytools_change_interpreter"},
+	{"caption":"Pytools: Run server","command":"pytools_run_server"},
+	{"caption":"Pytools: Shutdown server","command":"pytools_shutdown_server"},
+
+	{"caption":"Pytools: Format document","command":"pytools_format_document"},
+	{"caption":"Pytools: Publish diagnostic","command":"pytools_publish_diagnostic"},
+	{"caption":"Pytools: Clean diagnostic","command":"pytools_clean_diagnostic"},
+
+	{"caption":"Pytools: Open terminal","command":"pytools_open_terminal"},
+	{"caption":"Pytools: Open terminal here...","command":"pytools_open_terminal","args":{"current_file_directory":true}},
+	{"caption":"Pytools: Change terminal emulator","command":"pytools_change_terminal_emulator"},
+]

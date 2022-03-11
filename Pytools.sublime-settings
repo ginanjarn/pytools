@@ -1,0 +1,13 @@
+{
+	// Python interpreter path
+	"interpreter":"",
+	// Feature capability
+	"document_completion":true,
+	"document_hover":true,
+	"document_formatting":true,
+	"document_publish_diagnostic":true,
+	// Terminal emulator
+	// - for windows: "cmd", "powershell"
+	// - for linux: "gnome-terminal", "mate-terminal"
+	"terminal_emulator":"",
+}
