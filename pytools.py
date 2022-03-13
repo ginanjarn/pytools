@@ -49,8 +49,26 @@ def update_feature_capability():
     )
 
 
+def update_builtin_settings():
+    """update builtin settings"""
+
+    s = settings.Settings("Python.sublime-settings")
+    s.update(
+        {
+            "auto_complete_use_index": False,
+            "index_files": False,
+            "show_definitions": False,
+            "tab_completion": False,
+            "translate_tabs_to_spaces": True,
+        }
+    )
+
+
 def plugin_loaded():
     """sublime plugin loaded"""
+
+    # update builtin settings
+    update_builtin_settings()
 
     # load feature capability
     update_feature_capability()

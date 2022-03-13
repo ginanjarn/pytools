@@ -35,6 +35,14 @@ class Settings:
         with open_settings(self.base_name) as s:
             s.clear_on_change(key)
 
+    def update(self, mappings):
+        if not isinstance(mappings, dict):
+            raise ValueError("'dict' required")
+
+        with open_settings(self.base_name, True) as s:
+            s.update(mappings)
+
+
 
 # interpreter
 INTERPRETER = "interpreter"
