@@ -27,6 +27,14 @@ class Settings:
         with open_settings(self.base_name, True) as s:
             s.set(name, value)
 
+    def add_on_change(self, key, on_change):
+        with open_settings(self.base_name) as s:
+            s.add_on_change(key, on_change)
+
+    def clear_on_change(self, key):
+        with open_settings(self.base_name) as s:
+            s.clear_on_change(key)
+
 
 # interpreter
 INTERPRETER = "interpreter"
@@ -43,3 +51,4 @@ TERMINAL_EMULATOR = "terminal_emulator"
 
 BASE_NAME = "Pytools.sublime-settings"
 BASE_SETTING = Settings(BASE_NAME)
+BASE_CHANGE_LISTENER_KEY = "pytools_on_change"
