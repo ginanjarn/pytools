@@ -287,6 +287,9 @@ class PytoolsFormatDocumentCommand(sublime_plugin.TextCommand):
             else:
                 show_error_result(self.view.window(), formatted["error"]["message"])
 
+    def is_visible(self):
+        return self.view.match_selector(0, "source.python")
+
 
 class DiffHunk:
     """DiffHunk"""
@@ -575,6 +578,9 @@ class PytoolsCleanDiagnosticCommand(sublime_plugin.TextCommand):
         DIAGNOSTIC.clean_diagnostic(self.view)
         DIAGNOSTIC.hide_diagnostic_panel(self.view)
 
+    def is_visible(self):
+        return self.view.match_selector(0, "source.python")
+
 
 class PytoolsPublishDiagnosticCommand(sublime_plugin.TextCommand):
     """document publish diagnostic command"""
@@ -620,6 +626,9 @@ class PytoolsPublishDiagnosticCommand(sublime_plugin.TextCommand):
             if diagnostics["error"]["code"] == client.NOT_INITIALIZED:
                 path = get_workspace_path(self.view)
                 SESSION.start(path)
+
+    def is_visible(self):
+        return self.view.match_selector(0, "source.python")
 
 
 class CompletionParam:
