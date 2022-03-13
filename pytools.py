@@ -23,6 +23,61 @@ LOG_TEMPLATE = "%(levelname)s %(asctime)s %(filename)s:%(lineno)s  %(message)s"
 STREAM_HANDLER.setFormatter(logging.Formatter(LOG_TEMPLATE))
 LOGGER.addHandler(STREAM_HANDLER)
 
+# features capability
+
+DOCUMENT_COMPLETION = True
+DOCUMENT_HOVER = True
+DOCUMENT_FORMATTING = True
+DOCUMENT_PUBLISH_DIAGNOSTIC = True
+
+
+def update_feature_capability():
+    """update feature capability"""
+
+    LOGGER.info("update feature capability")
+
+    global DOCUMENT_COMPLETION
+    global DOCUMENT_HOVER
+    global DOCUMENT_FORMATTING
+    global DOCUMENT_PUBLISH_DIAGNOSTIC
+
+    DOCUMENT_COMPLETION = settings.BASE_SETTING.get(settings.DOCUMENT_COMPLETION, True)
+    DOCUMENT_HOVER = settings.BASE_SETTING.get(settings.DOCUMENT_HOVER, True)
+    DOCUMENT_FORMATTING = settings.BASE_SETTING.get(settings.DOCUMENT_FORMATTING, True)
+    DOCUMENT_PUBLISH_DIAGNOSTIC = settings.BASE_SETTING.get(
+        settings.DOCUMENT_PUBLISH_DIAGNOSTIC, True
+    )
+
+
+def update_builtin_settings():
+    """update builtin settings"""
+
+    s = settings.Settings("Python.sublime-settings")
+    s.update(
+        {
+            "auto_complete_use_index": False,
+            "index_files": False,
+            "show_definitions": False,
+            "tab_completion": False,
+            "translate_tabs_to_spaces": True,
+        }
+    )
+
+
+def plugin_loaded():
+    """sublime plugin loaded"""
+
+    # update builtin settings
+    update_builtin_settings()
+
+    # load feature capability
+    update_feature_capability()
+    # add settings change event listener
+    settings.BASE_SETTING.add_on_change(
+        settings.BASE_CHANGE_LISTENER_KEY, update_feature_capability
+    )
+
+
 # prevent multiple request while in process
 PROCESS_LOCK = Lock()
 
@@ -190,7 +245,7 @@ class PytoolsFormatDocumentCommand(sublime_plugin.TextCommand):
     """document formatting command"""
 
     def run(self, edit: sublime.Edit):
-        if not self.view.match_selector(0, "source.python"):
+        if not all([self.view.match_selector(0, "source.python"), DOCUMENT_FORMATTING]):
             return
 
         LOGGER.info("PytoolsFormatDocumentCommand")
@@ -525,7 +580,9 @@ class PytoolsPublishDiagnosticCommand(sublime_plugin.TextCommand):
     """document publish diagnostic command"""
 
     def run(self, edit: sublime.Edit):
-        if not self.view.match_selector(0, "source.python"):
+        if not all(
+            [self.view.match_selector(0, "source.python"), DOCUMENT_PUBLISH_DIAGNOSTIC]
+        ):
             return
 
         LOGGER.info("PytoolsPublishDiagnosticCommand")
@@ -711,7 +768,13 @@ class EventListener(sublime_plugin.EventListener):
         self, view: sublime.View, prefix: Any, locations: Any
     ) -> Optional[Iterable[Any]]:
 
-        if not (is_python_code(view) and is_identifier(view, locations[0])):
+        if not all(
+            [
+                is_python_code(view),
+                is_identifier(view, locations[0]),
+                DOCUMENT_COMPLETION,
+            ]
+        ):
             return None
 
         try:
@@ -780,7 +843,7 @@ class EventListener(sublime_plugin.EventListener):
             return
 
         if hover_zone == sublime.HOVER_TEXT:
-            if not is_identifier(view, point):
+            if not all([is_identifier(view, point), DOCUMENT_HOVER]):
                 return
 
             LOGGER.info("on HOVER_TEXT")
