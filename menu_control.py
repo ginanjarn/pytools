@@ -15,7 +15,8 @@ class PytoolsEditSettingsCommand(sublime_plugin.ApplicationCommand):
         sublime.run_command("new_window")
 
         # open default settings
-        file_name = os.path.join(sublime.packages_path(), "Pytools", settings.BASE_NAME)
+        package_path = os.path.dirname(__file__)
+        file_name = os.path.join(package_path, settings.BASE_NAME)
         view = sublime.active_window().open_file(file_name)
 
         # set window to current active view window
