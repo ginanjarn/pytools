@@ -1,0 +1,33 @@
+[
+    {
+        "id": "preferences",
+        "children":
+        [
+            {
+                "caption": "Package Settings",
+                "mnemonic": "P",
+                "id": "package-settings",
+                "children":
+                [
+                    {
+                        "caption": "Pytools",
+                        "children":
+                        [
+                            {
+                                "command": "pytools_edit_settings",
+                                "caption": "Settings"
+                            },
+                            { "caption": "-" }
+                        ]
+                    }
+                ]
+            },
+            {
+                "caption": "Pytools",
+                "mnemonic": "",
+                "command": "show_overlay",
+                "args": {"overlay": "command_palette", "text": "Pytools: "}
+            }
+        ]
+    }
+]
