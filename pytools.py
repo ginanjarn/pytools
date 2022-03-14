@@ -177,6 +177,10 @@ class PytoolsRunServerCommand(sublime_plugin.ApplicationCommand):
     def run_server(self, command, workdir):
         try:
             client.run_server(command, workdir)
+        except client.AddressInUse as err:
+            LOGGER.debug(repr(err))
+        except Exception as err:
+            LOGGER.error(f"run_server error: {err}")
         finally:
             self.view.erase_status("status_key")
             sublime.status_message("finish running server")
@@ -646,7 +650,8 @@ class CompletionParam:
 
     def __init__(self, view: sublime.View):
         # complete on first cursor
-        self.start = self.get_completion_point(view)
+        self.location = self.get_completion_point(view)
+        self.source = view.substr(sublime.Region(0, self.location))
 
     def get_completion_point(self, view: sublime.View) -> int:
         """get competion point"""
@@ -709,6 +714,7 @@ class CompletionItem(sublime.CompletionItem):
             "path": sublime.KIND_AMBIGUOUS,
             "keyword": sublime.KIND_KEYWORD,
             "statement": sublime.KIND_VARIABLE,
+            "property": sublime.KIND_VARIABLE,
         },
     )
 
@@ -793,7 +799,10 @@ class EventListener(sublime_plugin.EventListener):
             return None
 
         if self.completion and self._prev_param:
-            if self._prev_param.start == param.start:
+            if (
+                self._prev_param.location == param.location
+                and self._prev_param.source == param.source
+            ):
                 return sublime.CompletionList(
                     self.completion, sublime.INHIBIT_WORD_COMPLETIONS
                 )
@@ -809,8 +818,8 @@ class EventListener(sublime_plugin.EventListener):
             if not SESSION.active:
                 path = get_workspace_path(view)
                 SESSION.start(path)
-            source = view.substr(sublime.Region(0, param.start))
-            row, col = view.rowcol(param.start)
+            source = param.source
+            row, col = view.rowcol(param.location)
             row += 1
             completions = client.document_completion(source, row, col)
 
