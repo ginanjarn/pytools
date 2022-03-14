@@ -640,6 +640,9 @@ class CompletionParam:
     # match: string, tuple, dict,list
     access_member = re.compile(r"^(.*[\w\)\}\]\"']\.)\w*$")
 
+    # starting line
+    starting_line = re.compile(r"^(\s\w)\w*")
+
     # fmt: off
     nested_import = re.compile(
         r"^(.*\w+\,)\w*$"
@@ -686,6 +689,10 @@ class CompletionParam:
             if word_str.isidentifier():
                 return word_region.a
             return cursor
+
+        match = self.starting_line.match(line_str)
+        if match:
+            return start_line + len(match.group(1))
 
         if word_str.isidentifier():
             return word_region.a + 1
