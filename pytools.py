@@ -653,7 +653,8 @@ class CompletionParam:
 
     def __init__(self, view: sublime.View):
         # complete on first cursor
-        self.start = self.get_completion_point(view)
+        self.location = self.get_completion_point(view)
+        self.source = view.substr(sublime.Region(0, self.location))
 
     def get_completion_point(self, view: sublime.View) -> int:
         """get competion point"""
@@ -804,7 +805,10 @@ class EventListener(sublime_plugin.EventListener):
             return None
 
         if self.completion and self._prev_param:
-            if self._prev_param.start == param.start:
+            if (
+                self._prev_param.location == param.location
+                and self._prev_param.source == param.source
+            ):
                 return sublime.CompletionList(
                     self.completion, sublime.INHIBIT_WORD_COMPLETIONS
                 )
@@ -820,8 +824,8 @@ class EventListener(sublime_plugin.EventListener):
             if not SESSION.active:
                 path = get_workspace_path(view)
                 SESSION.start(path)
-            source = view.substr(sublime.Region(0, param.start))
-            row, col = view.rowcol(param.start)
+            source = param.source
+            row, col = view.rowcol(param.location)
             row += 1
             completions = client.document_completion(source, row, col)
 
