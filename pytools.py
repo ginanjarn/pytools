@@ -714,6 +714,7 @@ class CompletionItem(sublime.CompletionItem):
             "path": sublime.KIND_AMBIGUOUS,
             "keyword": sublime.KIND_KEYWORD,
             "statement": sublime.KIND_VARIABLE,
+            "property": sublime.KIND_VARIABLE,
         },
     )
 
