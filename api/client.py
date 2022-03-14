@@ -21,6 +21,13 @@ METHOD_ERROR = 5004
 PARAM_ERROR = 5005
 NOT_INITIALIZED = 5006
 
+# server process exit code
+EXIT_ADDRESS_IN_USE = 123
+
+
+class AddressInUse(OSError):
+    """socket address in use"""
+
 
 def run_server(cmd: List[str], workdir: str, envs=None):
     r"""run server with specific environment
@@ -48,6 +55,8 @@ def run_server(cmd: List[str], workdir: str, envs=None):
     time.sleep(5)
     exit_code = server_proc.poll()
     if exit_code:
+        if exit_code == EXIT_ADDRESS_IN_USE:
+            raise AddressInUse("socket address in use")
         raise OSError(f"server terminated with exit code {exit_code}")
 
 

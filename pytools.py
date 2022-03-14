@@ -177,6 +177,10 @@ class PytoolsRunServerCommand(sublime_plugin.ApplicationCommand):
     def run_server(self, command, workdir):
         try:
             client.run_server(command, workdir)
+        except client.AddressInUse as err:
+            LOGGER.debug(repr(err))
+        except Exception as err:
+            LOGGER.error(f"run_server error: {err}")
         finally:
             self.view.erase_status("status_key")
             sublime.status_message("finish running server")
