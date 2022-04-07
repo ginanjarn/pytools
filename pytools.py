@@ -747,6 +747,21 @@ def is_identifier(view: sublime.View, point: int):
     return True
 
 
+POPUP_STYLE = """
+body {
+    font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji";
+    line-height: 1.5;
+}
+code {
+    background-color: color(var(--background) alpha(0.8));
+    font-family: ui-monospace,SFMono-Regular,SF Mono,Menlo,Consolas,Liberation Mono,monospace;
+}
+.code_block {
+    background-color: color(var(--background) alpha(0.8));
+}
+"""
+
+
 class EventListener(sublime_plugin.EventListener):
     def __init__(self):
         self._prev_param = None
@@ -905,6 +920,9 @@ class EventListener(sublime_plugin.EventListener):
                     view.window().open_file(link, flags=sublime.ENCODED_POSITION)
 
                 try:
+                    content = (
+                        f"<style>{POPUP_STYLE}</style>\n{content}" if content else ""
+                    )
                     view.show_popup(
                         content,
                         flags=sublime.HIDE_ON_MOUSE_MOVE_AWAY,
