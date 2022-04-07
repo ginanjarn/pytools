@@ -99,7 +99,7 @@ def document_hover(source, row, column):
     """document_hover request"""
 
     params = {"source": source, "row": row, "column": column}
-    response = request(RPC(method="document_hover", params=params).to_str())
+    response = request(RPC(method="document_hover", params=params).to_str(), timeout=10)
     return RPC.from_str(response)
 
 

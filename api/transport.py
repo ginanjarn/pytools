@@ -71,28 +71,34 @@ class TransportMessage:
         return cls(body.decode())
 
 
-def request(message: str) -> str:
+def request(message: str, *, timeout=60) -> str:
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.connect(("127.0.0.1", 9005))
         tmsg = TransportMessage(message)
         sock.sendall(tmsg.to_bytes())
+        sock.settimeout(timeout)
 
         buffer = []
 
-        while True:
-            msg = sock.recv(1024)
-            buffer.append(msg)
-            try:
-                tmsg = TransportMessage.from_bytes(b"".join(buffer))
+        try:
+            while True:
+                msg = sock.recv(1024)
+                buffer.append(msg)
+                try:
+                    tmsg = TransportMessage.from_bytes(b"".join(buffer))
 
-            except ContentIncomplete:
-                continue
+                except ContentIncomplete:
+                    continue
 
-            if len(msg) < 1024:
-                break
+                if len(msg) < 1024:
+                    break
+            return tmsg.message
 
-        return tmsg.message
+        except socket.timeout:
+            return TransportMessage(
+                json.dumps({"error": {"code": 5000, "message": "request timedout"}})
+            ).message
 
 
 class RPC(dict):
