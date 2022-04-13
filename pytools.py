@@ -749,12 +749,11 @@ def is_identifier(view: sublime.View, point: int):
 
 POPUP_STYLE = """
 body {
-    font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif,"Apple Color Emoji","Segoe UI Emoji";
+    font-family: ui-monospace,SFMono-Regular,SF Mono,Menlo,Consolas,Liberation Mono,monospace;
     line-height: 1.5;
 }
 code {
     background-color: color(var(--background) alpha(0.8));
-    font-family: ui-monospace,SFMono-Regular,SF Mono,Menlo,Consolas,Liberation Mono,monospace;
 }
 .code_block {
     background-color: color(var(--background) alpha(0.8));
