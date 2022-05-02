@@ -361,31 +361,26 @@ class DiffHunk:
 class TextChange:
     """text change item"""
 
-    def __init__(
-        self, view: sublime.View, *, start_line: int, end_line: int, new_text: str
-    ):
-        start_point = view.line(view.text_point(start_line, 0)).a
-        end_point = view.line(view.text_point(end_line, 0)).b
-
-        self.region = sublime.Region(start_point, end_point)
+    def __init__(self, region: sublime.Region, new_text: str, cursor_move: int, /):
+        self.region = region
         self.new_text = new_text
-        # cursor move
-        self.cursor_move = len(new_text) - self.region.size()
+        self.cursor_move = cursor_move
 
     def __repr__(self):
-        return str({"region": repr(self.region), "new_text": self.new_text})
+        return f"TextChange(region={self.region}, new_text={self.new_text}, cursor_move={self.cursor_move})"
 
     def get_region(self, move=0):
-        return sublime.Region(self.region.a + move, self.region.b + move)
+        return sublime.Region(self.region.begin() + move, self.region.end() + move)
 
     @classmethod
-    def from_hunk(cls, view: sublime.View, hunk: DiffHunk):
-        return cls(
-            view,
-            start_line=hunk.start_remove,
-            end_line=hunk.end_remove,
-            new_text=hunk.insert_text,
+    def from_hunk(cls, view: sublime.View, hunk: DiffHunk, /):
+        region = sublime.Region(
+            a=view.line(view.text_point(hunk.start_remove, 0)).begin(),
+            b=view.line(view.text_point(hunk.end_remove, 0)).end(),
         )
+        new_text = hunk.insert_text
+        cursor_move = len(new_text) - region.size()
+        return cls(region, new_text, cursor_move)
 
 
 class PytoolsApplyDocumentChangesCommand(sublime_plugin.TextCommand):
@@ -418,15 +413,15 @@ class PytoolsApplyDocumentChangesCommand(sublime_plugin.TextCommand):
 
     def apply_change(self, edit: sublime.Edit, hunks: Iterable[DiffHunk]):
         view: sublime.View = self.view
-        changes = [TextChange.from_hunk(view, change) for change in hunks]
-        LOGGER.debug(changes)
+        text_changes = [TextChange.from_hunk(view, change) for change in hunks]
+        LOGGER.debug(text_changes)
 
         move = 0
-        for change in changes:
-            region = change.get_region(move)
+        for text_change in text_changes:
+            region = text_change.get_region(move)
             view.erase(edit, region)
-            view.insert(edit, region.a, change.new_text)
-            move += change.cursor_move
+            view.insert(edit, region.a, text_change.new_text)
+            move += text_change.cursor_move
 
 
 class DiagnosticItem:
@@ -439,7 +434,10 @@ class DiagnosticItem:
         self.message = message
 
     def __repr__(self):
-        return str({"row": self.row, "column": self.column, "message": self.message})
+        return (
+            f"DiagnosticItem(severity={self.severity}, row={self.row}, column={self.column},"
+            f" message={self.message})"
+        )
 
     def get_region(self, view: sublime.View):
         """get region"""
@@ -535,7 +533,7 @@ class Diagnostic:
                 scope="Invalid",
                 icon="circle",
                 flags=sublime.DRAW_NO_OUTLINE
-                | sublime.DRAW_SOLID_UNDERLINE
+                | sublime.DRAW_SQUIGGLY_UNDERLINE
                 | sublime.DRAW_NO_FILL,
             )
 
