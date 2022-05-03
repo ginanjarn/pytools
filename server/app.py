@@ -125,16 +125,16 @@ class RPCMessage(dict):
         return cls(message)
 
 
-class RequestError(ValueError):
-    """Request error"""
+class InvalidRequest(ValueError):
+    """Request invalid"""
 
 
-class ParamsError(ValueError):
+class InvalidParams(ValueError):
     """Params invalid"""
 
 
-class InitializeError(ValueError):
-    """Project environment error"""
+class NotInitialized(ValueError):
+    """Project not initialized"""
 
 
 class Server:
@@ -201,7 +201,7 @@ class Server:
         try:
             path = params["path"]
         except KeyError as err:
-            raise ParamsError(f"unable get {err}")
+            raise InvalidParams(f"unable get {err}")
 
         if path == self.project_settings["workspace"]:
             return
@@ -228,16 +228,16 @@ class Server:
     def document_completion(self, params) -> RPCMessage:
         LOGGER.info("document completion")
         if not self.project_settings:
-            raise InitializeError("project not initialized")
+            raise NotInitialized("project not initialized")
 
         try:
             source = params["source"]
             row = params["row"]
             column = params["column"]
         except KeyError as err:
-            raise ParamsError(f"unable get {err}")
+            raise InvalidParams(f"unable get {err}")
         except Exception as err:
-            raise ParamsError(f"error: {err}")
+            raise InvalidParams(f"error: {err}")
 
         try:
             candidates = self.jedi_svc.complete(source, row, column)
@@ -252,16 +252,16 @@ class Server:
     def document_hover(self, params) -> RPCMessage:
         LOGGER.info("document hover")
         if not self.project_settings:
-            raise InitializeError("project not initialized")
+            raise NotInitialized("project not initialized")
 
         try:
             source = params["source"]
             row = params["row"]
             column = params["column"]
         except KeyError as err:
-            raise ParamsError(f"unable get {err}") from err
+            raise InvalidParams(f"unable get {err}") from err
         except Exception as err:
-            raise ParamsError(f"error: {err}") from err
+            raise InvalidParams(f"error: {err}") from err
 
         try:
             candidates = self.jedi_svc.hover(source, row, column)
@@ -276,14 +276,14 @@ class Server:
     def document_formatting(self, params) -> RPCMessage:
         LOGGER.info("document formatting")
         if not self.project_settings:
-            raise InitializeError("project not initialized")
+            raise NotInitialized("project not initialized")
 
         try:
             source = params["source"]
         except KeyError as err:
-            raise ParamsError(f"unable get {err}") from err
+            raise InvalidParams(f"unable get {err}") from err
         except Exception as err:
-            raise ParamsError(f"error: {err}") from err
+            raise InvalidParams(f"error: {err}") from err
 
         try:
             formatted = black_service.format_code(source)
@@ -298,15 +298,15 @@ class Server:
     def document_publish_diagnostic(self, params) -> RPCMessage:
         LOGGER.info("document publish diagnostic")
         if not self.project_settings:
-            raise InitializeError("project not initialized")
+            raise NotInitialized("project not initialized")
 
         try:
             source = params.get("source")
             path = params["path"]
         except KeyError as err:
-            raise ParamsError(f"unable get {err}") from err
+            raise InvalidParams(f"unable get {err}") from err
         except Exception as err:
-            raise ParamsError(f"error: {err}") from err
+            raise InvalidParams(f"error: {err}") from err
 
         try:
             if source is None:
@@ -332,7 +332,7 @@ class Server:
             method = message["method"]
             params = message["params"]
         except (KeyError, TypeError) as err:
-            raise RequestError("unable get 'method' of 'params'") from err
+            raise InvalidRequest("unable get 'method' of 'params'") from err
 
         try:
             func = self.service_map[method]
@@ -378,13 +378,13 @@ class Server:
         response = RPCMessage()
         try:
             result = self.handle_request(message)
-        except RequestError as err:
+        except InvalidRequest as err:
             LOGGER.error("request error", exc_info=True)
             response = RPCMessage.response(error=RPCErrorMessage(INPUT_ERROR, str(err)))
-        except ParamsError as err:
+        except InvalidParams as err:
             LOGGER.error("params error", exc_info=True)
             response = RPCMessage.response(error=RPCErrorMessage(PARAM_ERROR, str(err)))
-        except InitializeError as err:
+        except NotInitialized as err:
             response = RPCMessage.response(
                 error=RPCErrorMessage(NOT_INITIALIZED, str(err))
             )
