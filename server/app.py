@@ -349,11 +349,11 @@ class Server:
         buffer = []
         buf_size = 2048
 
-        def send_response(message: RPCMessage):
+        def send_response(message):
             LOGGER.debug(message)
-            if not isinstance(message, RPCMessage):
-                raise TypeError("required message type <class 'RPCMessage'>")
-            request.sendall(message.to_bytes())
+            if isinstance(message, RPCMessage):
+                message = message.to_bytes()
+            request.sendall(message)
 
         while True:
             buf = request.recv(buf_size)
