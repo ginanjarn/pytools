@@ -5,7 +5,7 @@ import os
 import time
 import subprocess
 from typing import List, Dict, Any
-from .transport import request, RPC
+from .transport import request, RPCMessage
 
 LOGGER = logging.getLogger(__name__)
 # LOGGER.setLevel(logging.DEBUG)
@@ -62,7 +62,7 @@ def run_server(cmd: List[str], workdir: str, envs=None):
 
 def shutdown():
     """shutdown server"""
-    request(RPC(method="shutdown", params=None).to_str())
+    request(RPCMessage.request(method="shutdown", params=None))
 
 
 def initialize(workspace_path=None, **kwargs):
@@ -70,45 +70,47 @@ def initialize(workspace_path=None, **kwargs):
 
     params = {"workspace": {"path": workspace_path}}
     params.update(kwargs)
-    response = request(RPC(method="initialize", params=params).to_str())
-    return RPC.from_str(response)
+    response = request(RPCMessage.request(method="initialize", params=params))
+    return response
 
 
 def change_workspace(workspace_path):
     """change workspace path"""
 
     params = {"path": workspace_path}
-    response = request(RPC(method="change_workspace", params=params).to_str())
-    return RPC.from_str(response)
+    response = request(RPCMessage.request(method="change_workspace", params=params))
+    return response
 
 
 def exit():
     """exit project"""
-    request(RPC(method="exit", params=None).to_str())
+    request(RPCMessage.request(method="exit", params=None))
 
 
 def document_completion(source, row, column):
     """document_completion request"""
 
     params = {"source": source, "row": row, "column": column}
-    response = request(RPC(method="document_completion", params=params).to_str())
-    return RPC.from_str(response)
+    response = request(RPCMessage.request(method="document_completion", params=params))
+    return response
 
 
 def document_hover(source, row, column):
     """document_hover request"""
 
     params = {"source": source, "row": row, "column": column}
-    response = request(RPC(method="document_hover", params=params).to_str(), timeout=10)
-    return RPC.from_str(response)
+    response = request(
+        RPCMessage.request(method="document_hover", params=params), timeout=10
+    )
+    return response
 
 
 def document_formatting(source):
     """document_formatting request"""
 
     params = {"source": source}
-    response = request(RPC(method="document_formatting", params=params).to_str())
-    return RPC.from_str(response)
+    response = request(RPCMessage.request(method="document_formatting", params=params))
+    return response
 
 
 def document_publish_diagnostic(*, source: str, path: str):
@@ -116,9 +118,9 @@ def document_publish_diagnostic(*, source: str, path: str):
 
     params = {"source": source, "path": path}
     response = request(
-        RPC(method="document_publish_diagnostic", params=params).to_str()
+        RPCMessage.request(method="document_publish_diagnostic", params=params)
     )
-    return RPC.from_str(response)
+    return response
 
 
 class Session:
