@@ -1,108 +1,109 @@
 import json
 import re
 import socket
+from typing import Union
 
 
 class ContentIncomplete(ValueError):
-    """content incomplete, actual size less than defined size in header"""
+    """expected size < defined size in header"""
 
 
 class ContentOverlow(ValueError):
-    """content overflow. actual size larger than defined size in header"""
+    """expected size > defined size in header"""
 
 
-class TransportMessage:
-    r"""Transport message protocol
+class RPCErrorMessage(dict):
+    """RPCErrorMessage"""
 
-    message contain header and body
+    def __init__(self, code: int, message: str = "", **kwargs):
+        super().__init__({"code": code, "message": message})
+        self.update(kwargs)
 
-    Header and body separated by \r\n\r\n.
-    
-    Header must contain 'Content-Length' which value is length body in bytes
-    Header format <key>: <value>.
-    Multi-line header separated by \r\n.
-    """
 
-    def __init__(self, message: str):
-        self.message = message
-
-    def __repr__(self):
-        return f"TransportMessage(message='{self.message}')"
+class RPCMessage(dict):
+    """RPCMessage"""
 
     def to_bytes(self):
-        content_encoded = self.message.encode()
-        header = f"Content-Length: {len(content_encoded)}".encode("ascii")
-        return b"\r\n\r\n".join([header, content_encoded])
+        content = json.dumps(self)
+        content_encoded = content.encode()
+        header = f"Content-Length: {len(content_encoded)}"
+        return b"%s\r\n\r\n%s" % (header.encode("ascii"), content_encoded)
 
     @classmethod
-    def from_bytes(cls, buf: bytes):
+    def request(cls, method, params=None):
+        if params is None:
+            params = {}
+        return cls({"method": method, "params": params})
+
+    @classmethod
+    def response(cls, result=None, error=None):
+        if error:
+            return cls({"error": error})
+        return cls({"result": result})
+
+    _content_length_pattern = re.compile(r"Content-Length: (\d+)")
+
+    @staticmethod
+    def get_content_length(header):
+        for line in header.splitlines():
+            match = RPCMessage._content_length_pattern.match(line)
+            if match:
+                return int(match.group(1))
+        raise ValueError("unable get 'Content-Length'")
+
+    @classmethod
+    def from_bytes(cls, b: bytes, /):
+        try:
+            header, content = b.split(b"\r\n\r\n")
+        except Exception as err:
+            raise ValueError("unable get header") from err
+        content_length = cls.get_content_length(header.decode("ascii"))
+
+        expected_length = len(content)
+        if expected_length < content_length:
+            raise ContentIncomplete(
+                f"want {content_length}, expected {expected_length}"
+            )
+        elif expected_length > content_length:
+            raise ContentOverflow(f"want {content_length}, expected {expected_length}")
 
         try:
-            head, body = buf.split(b"\r\n\r\n")
-
-        except Exception:
-            raise ValueError("unable get header")
-
-        _content_length_pattern = re.compile(r"Content-Length: (\d+)")
-        _content_length = 0
-
-        for line in head.splitlines():
-            match = _content_length_pattern.match(line.decode("ascii"))
-            if match:
-                _content_length = int(match.group(1))
-                # Content-Length found, stop find next
-                break
-
-        if not _content_length:
-            raise ValueError("unable get 'Content-Length'")
-
-        body_len = len(body)
-
-        if body_len != _content_length:
-            if body_len < _content_length:
-                raise ContentIncomplete(
-                    f"content size invalid, want {_content_length}, expected {body_len}"
-                )
-            if body_len < _content_length:
-                raise ContentOverlow(
-                    f"content size invalid, want {_content_length}, expected {body_len}"
-                )
-
-        return cls(body.decode())
+            message = json.loads(content.decode())
+        except Exception as err:
+            LOGGER.debug(content)
+            raise ValueError("error parsing message") from err
+        return cls(message)
 
 
-def request(message: str) -> str:
+def request(message: Union[bytes, RPCMessage], *, timeout=60) -> RPCMessage:
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.connect(("127.0.0.1", 9005))
-        tmsg = TransportMessage(message)
-        sock.sendall(tmsg.to_bytes())
+
+        if isinstance(message, RPCMessage):
+            message = message.to_bytes()
+
+        sock.sendall(message)
+        sock.settimeout(timeout)
 
         buffer = []
+        buf_size = 2048
 
         while True:
-            msg = sock.recv(1024)
+            try:
+                msg = sock.recv(buf_size)
+            except socket.timeout:
+                return RPCMessage.response(
+                    RPCErrorMessage(code=5000, message="request timedout")
+                )
+
             buffer.append(msg)
             try:
-                tmsg = TransportMessage.from_bytes(b"".join(buffer))
-
+                response = RPCMessage.from_bytes(b"".join(buffer))
             except ContentIncomplete:
                 continue
 
-            if len(msg) < 1024:
+            if len(msg) < buf_size:
                 break
 
-        return tmsg.message
-
-
-class RPC(dict):
-    """RPC base class"""
-
-    def to_str(self):
-        """dump to str"""
-        return json.dumps(self)
-
-    @classmethod
-    def from_str(cls, s):
-        """load from str"""
-        return cls(json.loads(s))
+        return response

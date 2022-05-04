@@ -17,11 +17,66 @@ from .api import client
 from .api import settings
 
 LOGGER = logging.getLogger(__name__)
-LOGGER.setLevel(logging.DEBUG)
+# LOGGER.setLevel(logging.DEBUG)
 STREAM_HANDLER = logging.StreamHandler()
 LOG_TEMPLATE = "%(levelname)s %(asctime)s %(filename)s:%(lineno)s  %(message)s"
 STREAM_HANDLER.setFormatter(logging.Formatter(LOG_TEMPLATE))
 LOGGER.addHandler(STREAM_HANDLER)
+
+# features capability
+
+DOCUMENT_COMPLETION = True
+DOCUMENT_HOVER = True
+DOCUMENT_FORMATTING = True
+DOCUMENT_PUBLISH_DIAGNOSTIC = True
+
+
+def update_feature_capability():
+    """update feature capability"""
+
+    LOGGER.info("update feature capability")
+
+    global DOCUMENT_COMPLETION
+    global DOCUMENT_HOVER
+    global DOCUMENT_FORMATTING
+    global DOCUMENT_PUBLISH_DIAGNOSTIC
+
+    DOCUMENT_COMPLETION = settings.BASE_SETTING.get(settings.DOCUMENT_COMPLETION, True)
+    DOCUMENT_HOVER = settings.BASE_SETTING.get(settings.DOCUMENT_HOVER, True)
+    DOCUMENT_FORMATTING = settings.BASE_SETTING.get(settings.DOCUMENT_FORMATTING, True)
+    DOCUMENT_PUBLISH_DIAGNOSTIC = settings.BASE_SETTING.get(
+        settings.DOCUMENT_PUBLISH_DIAGNOSTIC, True
+    )
+
+
+def update_builtin_settings():
+    """update builtin settings"""
+
+    s = settings.Settings("Python.sublime-settings")
+    s.update(
+        {
+            "auto_complete_use_index": False,
+            "index_files": False,
+            "show_definitions": False,
+            "tab_completion": False,
+            "translate_tabs_to_spaces": True,
+        }
+    )
+
+
+def plugin_loaded():
+    """sublime plugin loaded"""
+
+    # update builtin settings
+    update_builtin_settings()
+
+    # load feature capability
+    update_feature_capability()
+    # add settings change event listener
+    settings.BASE_SETTING.add_on_change(
+        settings.BASE_CHANGE_LISTENER_KEY, update_feature_capability
+    )
+
 
 # prevent multiple request while in process
 PROCESS_LOCK = Lock()
@@ -122,6 +177,10 @@ class PytoolsRunServerCommand(sublime_plugin.ApplicationCommand):
     def run_server(self, command, workdir):
         try:
             client.run_server(command, workdir)
+        except client.AddressInUse as err:
+            LOGGER.debug(repr(err))
+        except Exception as err:
+            LOGGER.error(f"run_server error: {err}")
         finally:
             self.view.erase_status("status_key")
             sublime.status_message("finish running server")
@@ -190,7 +249,7 @@ class PytoolsFormatDocumentCommand(sublime_plugin.TextCommand):
     """document formatting command"""
 
     def run(self, edit: sublime.Edit):
-        if not self.view.match_selector(0, "source.python"):
+        if not all([self.view.match_selector(0, "source.python"), DOCUMENT_FORMATTING]):
             return
 
         LOGGER.info("PytoolsFormatDocumentCommand")
@@ -231,6 +290,9 @@ class PytoolsFormatDocumentCommand(sublime_plugin.TextCommand):
                 SESSION.start(path)
             else:
                 show_error_result(self.view.window(), formatted["error"]["message"])
+
+    def is_visible(self):
+        return self.view.match_selector(0, "source.python")
 
 
 class DiffHunk:
@@ -299,31 +361,26 @@ class DiffHunk:
 class TextChange:
     """text change item"""
 
-    def __init__(
-        self, view: sublime.View, *, start_line: int, end_line: int, new_text: str
-    ):
-        start_point = view.line(view.text_point(start_line, 0)).a
-        end_point = view.line(view.text_point(end_line, 0)).b
-
-        self.region = sublime.Region(start_point, end_point)
+    def __init__(self, region: sublime.Region, new_text: str, cursor_move: int, /):
+        self.region = region
         self.new_text = new_text
-        # cursor move
-        self.cursor_move = len(new_text) - self.region.size()
+        self.cursor_move = cursor_move
 
     def __repr__(self):
-        return str({"region": repr(self.region), "new_text": self.new_text})
+        return f"TextChange(region={self.region}, new_text={self.new_text}, cursor_move={self.cursor_move})"
 
     def get_region(self, move=0):
-        return sublime.Region(self.region.a + move, self.region.b + move)
+        return sublime.Region(self.region.begin() + move, self.region.end() + move)
 
     @classmethod
-    def from_hunk(cls, view: sublime.View, hunk: DiffHunk):
-        return cls(
-            view,
-            start_line=hunk.start_remove,
-            end_line=hunk.end_remove,
-            new_text=hunk.insert_text,
+    def from_hunk(cls, view: sublime.View, hunk: DiffHunk, /):
+        region = sublime.Region(
+            a=view.line(view.text_point(hunk.start_remove, 0)).begin(),
+            b=view.line(view.text_point(hunk.end_remove, 0)).end(),
         )
+        new_text = hunk.insert_text
+        cursor_move = len(new_text) - region.size()
+        return cls(region, new_text, cursor_move)
 
 
 class PytoolsApplyDocumentChangesCommand(sublime_plugin.TextCommand):
@@ -356,15 +413,15 @@ class PytoolsApplyDocumentChangesCommand(sublime_plugin.TextCommand):
 
     def apply_change(self, edit: sublime.Edit, hunks: Iterable[DiffHunk]):
         view: sublime.View = self.view
-        changes = [TextChange.from_hunk(view, change) for change in hunks]
-        LOGGER.debug(changes)
+        text_changes = [TextChange.from_hunk(view, change) for change in hunks]
+        LOGGER.debug(text_changes)
 
         move = 0
-        for change in changes:
-            region = change.get_region(move)
+        for text_change in text_changes:
+            region = text_change.get_region(move)
             view.erase(edit, region)
-            view.insert(edit, region.a, change.new_text)
-            move += change.cursor_move
+            view.insert(edit, region.a, text_change.new_text)
+            move += text_change.cursor_move
 
 
 class DiagnosticItem:
@@ -377,7 +434,10 @@ class DiagnosticItem:
         self.message = message
 
     def __repr__(self):
-        return str({"row": self.row, "column": self.column, "message": self.message})
+        return (
+            f"DiagnosticItem(severity={self.severity}, row={self.row}, column={self.column},"
+            f" message={self.message})"
+        )
 
     def get_region(self, view: sublime.View):
         """get region"""
@@ -473,7 +533,7 @@ class Diagnostic:
                 scope="Invalid",
                 icon="circle",
                 flags=sublime.DRAW_NO_OUTLINE
-                | sublime.DRAW_SOLID_UNDERLINE
+                | sublime.DRAW_SQUIGGLY_UNDERLINE
                 | sublime.DRAW_NO_FILL,
             )
 
@@ -520,12 +580,17 @@ class PytoolsCleanDiagnosticCommand(sublime_plugin.TextCommand):
         DIAGNOSTIC.clean_diagnostic(self.view)
         DIAGNOSTIC.hide_diagnostic_panel(self.view)
 
+    def is_visible(self):
+        return self.view.match_selector(0, "source.python")
+
 
 class PytoolsPublishDiagnosticCommand(sublime_plugin.TextCommand):
     """document publish diagnostic command"""
 
     def run(self, edit: sublime.Edit):
-        if not self.view.match_selector(0, "source.python"):
+        if not all(
+            [self.view.match_selector(0, "source.python"), DOCUMENT_PUBLISH_DIAGNOSTIC]
+        ):
             return
 
         LOGGER.info("PytoolsPublishDiagnosticCommand")
@@ -564,6 +629,9 @@ class PytoolsPublishDiagnosticCommand(sublime_plugin.TextCommand):
                 path = get_workspace_path(self.view)
                 SESSION.start(path)
 
+    def is_visible(self):
+        return self.view.match_selector(0, "source.python")
+
 
 class CompletionParam:
 
@@ -580,7 +648,8 @@ class CompletionParam:
 
     def __init__(self, view: sublime.View):
         # complete on first cursor
-        self.start = self.get_completion_point(view)
+        self.location = self.get_completion_point(view)
+        self.source = view.substr(sublime.Region(0, self.location))
 
     def get_completion_point(self, view: sublime.View) -> int:
         """get competion point"""
@@ -643,6 +712,7 @@ class CompletionItem(sublime.CompletionItem):
             "path": sublime.KIND_AMBIGUOUS,
             "keyword": sublime.KIND_KEYWORD,
             "statement": sublime.KIND_VARIABLE,
+            "property": sublime.KIND_VARIABLE,
         },
     )
 
@@ -673,6 +743,20 @@ def is_identifier(view: sublime.View, point: int):
     if view.match_selector(point, "comment"):
         return False
     return True
+
+
+POPUP_STYLE = """
+body {
+    font-family: ui-monospace,SFMono-Regular,SF Mono,Menlo,Consolas,Liberation Mono,monospace;
+    line-height: 1.5;
+}
+code {
+    background-color: color(var(--background) alpha(0.8));
+}
+.code_block {
+    background-color: color(var(--background) alpha(0.8));
+}
+"""
 
 
 class EventListener(sublime_plugin.EventListener):
@@ -711,7 +795,13 @@ class EventListener(sublime_plugin.EventListener):
         self, view: sublime.View, prefix: Any, locations: Any
     ) -> Optional[Iterable[Any]]:
 
-        if not (is_python_code(view) and is_identifier(view, locations[0])):
+        if not all(
+            [
+                is_python_code(view),
+                is_identifier(view, locations[0]),
+                DOCUMENT_COMPLETION,
+            ]
+        ):
             return None
 
         try:
@@ -721,7 +811,10 @@ class EventListener(sublime_plugin.EventListener):
             return None
 
         if self.completion and self._prev_param:
-            if self._prev_param.start == param.start:
+            if (
+                self._prev_param.location == param.location
+                and self._prev_param.source == param.source
+            ):
                 return sublime.CompletionList(
                     self.completion, sublime.INHIBIT_WORD_COMPLETIONS
                 )
@@ -737,8 +830,8 @@ class EventListener(sublime_plugin.EventListener):
             if not SESSION.active:
                 path = get_workspace_path(view)
                 SESSION.start(path)
-            source = view.substr(sublime.Region(0, param.start))
-            row, col = view.rowcol(param.start)
+            source = param.source
+            row, col = view.rowcol(param.location)
             row += 1
             completions = client.document_completion(source, row, col)
 
@@ -780,7 +873,7 @@ class EventListener(sublime_plugin.EventListener):
             return
 
         if hover_zone == sublime.HOVER_TEXT:
-            if not is_identifier(view, point):
+            if not all([is_identifier(view, point), DOCUMENT_HOVER]):
                 return
 
             LOGGER.info("on HOVER_TEXT")
@@ -824,6 +917,9 @@ class EventListener(sublime_plugin.EventListener):
                     view.window().open_file(link, flags=sublime.ENCODED_POSITION)
 
                 try:
+                    content = (
+                        f"<style>{POPUP_STYLE}</style>\n{content}" if content else ""
+                    )
                     view.show_popup(
                         content,
                         flags=sublime.HIDE_ON_MOUSE_MOVE_AWAY,

@@ -129,12 +129,11 @@ def documentation_to_rpc(names: List[JediName]) -> Dict[str, Any]:
             footer = f"<a href='{module_path}:{row}:{col}'>Go to definition</a>"
         except Exception as err:
             LOGGER.debug(err)
-            return ""
-        else:
-            result = "\n".join(
-                [item for item in (header, title, signature, body, footer) if item]
-            )
-            return f"<div>{result}</div>"
+        
+        result = "\n".join(
+            [item for item in (header, title, signature, body, footer) if item]
+        )
+        return f"<div>{result}</div>"
 
     result = {"content": build_documentation(names[0]) if names else ""}
     LOGGER.debug("result: %s", result)

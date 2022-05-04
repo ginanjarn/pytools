@@ -5,10 +5,10 @@ import os
 import time
 import subprocess
 from typing import List, Dict, Any
-from .transport import request, RPC
+from .transport import request, RPCMessage
 
 LOGGER = logging.getLogger(__name__)
-LOGGER.setLevel(logging.DEBUG)
+# LOGGER.setLevel(logging.DEBUG)
 STREAM_HANDLER = logging.StreamHandler()
 LOG_TEMPLATE = "%(levelname)s %(asctime)s %(filename)s:%(lineno)s  %(message)s"
 STREAM_HANDLER.setFormatter(logging.Formatter(LOG_TEMPLATE))
@@ -20,6 +20,13 @@ INPUT_ERROR = 5002
 METHOD_ERROR = 5004
 PARAM_ERROR = 5005
 NOT_INITIALIZED = 5006
+
+# server process exit code
+EXIT_ADDRESS_IN_USE = 123
+
+
+class AddressInUse(OSError):
+    """socket address in use"""
 
 
 def run_server(cmd: List[str], workdir: str, envs=None):
@@ -48,12 +55,14 @@ def run_server(cmd: List[str], workdir: str, envs=None):
     time.sleep(5)
     exit_code = server_proc.poll()
     if exit_code:
+        if exit_code == EXIT_ADDRESS_IN_USE:
+            raise AddressInUse("socket address in use")
         raise OSError(f"server terminated with exit code {exit_code}")
 
 
 def shutdown():
     """shutdown server"""
-    request(RPC(method="shutdown", params=None).to_str())
+    request(RPCMessage.request(method="shutdown", params=None))
 
 
 def initialize(workspace_path=None, **kwargs):
@@ -61,45 +70,47 @@ def initialize(workspace_path=None, **kwargs):
 
     params = {"workspace": {"path": workspace_path}}
     params.update(kwargs)
-    response = request(RPC(method="initialize", params=params).to_str())
-    return RPC.from_str(response)
+    response = request(RPCMessage.request(method="initialize", params=params))
+    return response
 
 
 def change_workspace(workspace_path):
     """change workspace path"""
 
     params = {"path": workspace_path}
-    response = request(RPC(method="change_workspace", params=params).to_str())
-    return RPC.from_str(response)
+    response = request(RPCMessage.request(method="change_workspace", params=params))
+    return response
 
 
 def exit():
     """exit project"""
-    request(RPC(method="exit", params=None).to_str())
+    request(RPCMessage.request(method="exit", params=None))
 
 
 def document_completion(source, row, column):
     """document_completion request"""
 
     params = {"source": source, "row": row, "column": column}
-    response = request(RPC(method="document_completion", params=params).to_str())
-    return RPC.from_str(response)
+    response = request(RPCMessage.request(method="document_completion", params=params))
+    return response
 
 
 def document_hover(source, row, column):
     """document_hover request"""
 
     params = {"source": source, "row": row, "column": column}
-    response = request(RPC(method="document_hover", params=params).to_str())
-    return RPC.from_str(response)
+    response = request(
+        RPCMessage.request(method="document_hover", params=params), timeout=10
+    )
+    return response
 
 
 def document_formatting(source):
     """document_formatting request"""
 
     params = {"source": source}
-    response = request(RPC(method="document_formatting", params=params).to_str())
-    return RPC.from_str(response)
+    response = request(RPCMessage.request(method="document_formatting", params=params))
+    return response
 
 
 def document_publish_diagnostic(*, source: str, path: str):
@@ -107,9 +118,9 @@ def document_publish_diagnostic(*, source: str, path: str):
 
     params = {"source": source, "path": path}
     response = request(
-        RPC(method="document_publish_diagnostic", params=params).to_str()
+        RPCMessage.request(method="document_publish_diagnostic", params=params)
     )
-    return RPC.from_str(response)
+    return response
 
 
 class Session:
