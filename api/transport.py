@@ -1,6 +1,7 @@
 import json
 import re
 import socket
+from typing import Union
 
 
 class ContentIncomplete(ValueError):
@@ -11,96 +12,98 @@ class ContentOverlow(ValueError):
     """expected size > defined size in header"""
 
 
-class Transport:
-    r"""Transport message protocol
-    ---------------------------------
-    ... Content-Length: <length>\r\n    # header
-    ... \r\n                            # separator
-    ... content                         # content
-    """
+class RPCErrorMessage(dict):
+    """RPCErrorMessage"""
 
-    def __init__(self, message: str):
-        self.message = message
+    def __init__(self, code: int, message: str = "", **kwargs):
+        super().__init__({"code": code, "message": message})
+        self.update(kwargs)
 
-    def __repr__(self):
-        return f"Transport(message='{self.message}')"
+
+class RPCMessage(dict):
+    """RPCMessage"""
 
     def to_bytes(self):
-        content_encoded = self.message.encode()
+        content = json.dumps(self)
+        content_encoded = content.encode()
         header = f"Content-Length: {len(content_encoded)}"
-        return b"\r\n\r\n".join([header.encode("ascii"), content_encoded])
-
-    CONTENT_LENGTH_PATTERN = re.compile(r"Content-Length: (\d+)")
-
-    @staticmethod
-    def get_content_length(header: str):
-        for line in header.splitlines():
-            match = Transport.CONTENT_LENGTH_PATTERN.match(line)
-            if match:
-                return int(match.group(1))
-        raise ValueError("Content-Length not found")
+        return b"%s\r\n\r\n%s" % (header.encode("ascii"), content_encoded)
 
     @classmethod
-    def from_bytes(cls, buf: bytes):
+    def request(cls, method, params=None):
+        if params is None:
+            params = {}
+        return cls({"method": method, "params": params})
 
+    @classmethod
+    def response(cls, result=None, error=None):
+        if error:
+            return cls({"error": error})
+        return cls({"result": result})
+
+    _content_length_pattern = re.compile(r"Content-Length: (\d+)")
+
+    @staticmethod
+    def get_content_length(header):
+        for line in header.splitlines():
+            match = RPCMessage._content_length_pattern.match(line)
+            if match:
+                return int(match.group(1))
+        raise ValueError("unable get 'Content-Length'")
+
+    @classmethod
+    def from_bytes(cls, b: bytes, /):
         try:
-            header, body = buf.split(b"\r\n\r\n")
-        except Exception:
-            raise ValueError("unable get header")
-
+            header, content = b.split(b"\r\n\r\n")
+        except Exception as err:
+            raise ValueError("unable get header") from err
         content_length = cls.get_content_length(header.decode("ascii"))
-        expected_length = len(body)
 
+        expected_length = len(content)
         if expected_length < content_length:
             raise ContentIncomplete(
                 f"want {content_length}, expected {expected_length}"
             )
+        elif expected_length > content_length:
+            raise ContentOverflow(f"want {content_length}, expected {expected_length}")
 
-        if expected_length == content_length:
-            return cls(body.decode())
+        try:
+            message = json.loads(content.decode())
+        except Exception as err:
+            LOGGER.debug(content)
+            raise ValueError("error parsing message") from err
+        return cls(message)
 
-        if expected_length > content_length:
-            raise ContentOverlow(f"want {content_length}, expected {expected_length}")
 
-
-def request(message: str, *, timeout=60) -> str:
+def request(message: Union[bytes, RPCMessage], *, timeout=60) -> RPCMessage:
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.connect(("127.0.0.1", 9005))
-        tmsg = Transport(message)
-        sock.sendall(tmsg.to_bytes())
+
+        if isinstance(message, RPCMessage):
+            message = message.to_bytes()
+
+        sock.sendall(message)
         sock.settimeout(timeout)
 
         buffer = []
+        buf_size = 2048
 
-        try:
-            while True:
-                msg = sock.recv(1024)
-                buffer.append(msg)
-                try:
-                    tmsg = Transport.from_bytes(b"".join(buffer))
+        while True:
+            try:
+                msg = sock.recv(buf_size)
+            except socket.timeout:
+                return RPCMessage.response(
+                    RPCErrorMessage(code=5000, message="request timedout")
+                )
 
-                except ContentIncomplete:
-                    continue
+            buffer.append(msg)
+            try:
+                response = RPCMessage.from_bytes(b"".join(buffer))
+            except ContentIncomplete:
+                continue
 
-                if len(msg) < 1024:
-                    break
-            return tmsg.message
+            if len(msg) < buf_size:
+                break
 
-        except socket.timeout:
-            return Transport(
-                json.dumps({"error": {"code": 5000, "message": "request timedout"}})
-            ).message
-
-
-class RPC(dict):
-    """RPC base class"""
-
-    def to_str(self):
-        """dump to str"""
-        return json.dumps(self)
-
-    @classmethod
-    def from_str(cls, s):
-        """load from str"""
-        return cls(json.loads(s))
+        return response
