@@ -203,7 +203,7 @@ class Server:
         except KeyError as err:
             raise InvalidParams(f"unable get {err}")
 
-        if path == self.project_settings["workspace"]:
+        if path == self.project_settings.get("workspace", None):
             return
 
         try:
