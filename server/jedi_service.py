@@ -1,9 +1,10 @@
 """handle services associated to jedi module"""
 
+import html
 import logging
 import os
 
-from html import escape
+from io import StringIO
 from typing import List, Dict, Any
 
 from jedi import Script, Project
@@ -80,7 +81,9 @@ def completion_to_rpc(completions: List[JediCompletion]) -> Dict[str, Any]:
 
 def escape_characters(s: str):
     """escape html character"""
-    return escape(s, quote=False).replace("\n", "<br>").replace("  ", "&nbsp;&nbsp;")
+    return (
+        html.escape(s, quote=False).replace("\n", "<br>").replace("  ", "&nbsp;&nbsp;")
+    )
 
 
 def documentation_to_rpc(names: List[JediName]) -> Dict[str, Any]:
@@ -88,6 +91,7 @@ def documentation_to_rpc(names: List[JediName]) -> Dict[str, Any]:
 
     def build_documentation(name: JediName) -> str:
         LOGGER.debug(f"name: {repr(name)}")
+
         try:
             module_name = name.module_name
             module_path = name.module_path
@@ -102,23 +106,26 @@ def documentation_to_rpc(names: List[JediName]) -> Dict[str, Any]:
             LOGGER.debug(err)
             return ""
 
+        documentation = StringIO()
+
         # header
-        header = (
-            f"module: <code>{module_name}</code>"
-            if module_name and module_name != "__main__"
-            else ""
-        )
+        if module_name and module_name != "__main__":
+            documentation.write(f"<p>module: <code>{module_name}</code></p>\n")
+
         # title
-        title = f"<h3>{type_} <strong><code>{name.name}</code></strong></h3>"
+        documentation.write(f"<h3>{type_} <code>{name.name}</code></h3>\n")
+
         # signature
-        signature = (
-            f"<p><code>{escape_characters(signature)}</code></p>" if signature else ""
-        )
-        # body
-        body = f"<p>{escape_characters(docstring)}</p>" if docstring else ""
+        if signature:
+            documentation.write(
+                f"<div class='code_block'>{escape_characters(signature)}</div>\n"
+            )
+
+        # docstring
+        if docstring:
+            documentation.write(f"<p>{escape_characters(docstring)}</p>\n")
 
         # footer
-        footer = ""
         try:
             row, col = name.line, name.column
             # use one-based column index
@@ -126,14 +133,13 @@ def documentation_to_rpc(names: List[JediName]) -> Dict[str, Any]:
             module_path = (
                 module_path if module_path and module_path != "__main__" else ""
             )
-            footer = f"<a href='{module_path}:{row}:{col}'>Go to definition</a>"
+            documentation.write(
+                f"<p><a href='{module_path}:{row}:{col}'>Go to definition</a></p>\n"
+            )
         except Exception as err:
             LOGGER.debug(err)
-        
-        result = "\n".join(
-            [item for item in (header, title, signature, body, footer) if item]
-        )
-        return f"<div>{result}</div>"
+
+        return f"<div>{documentation.getvalue()}</div>"
 
     result = {"content": build_documentation(names[0]) if names else ""}
     LOGGER.debug("result: %s", result)

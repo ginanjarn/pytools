@@ -747,14 +747,20 @@ def is_identifier(view: sublime.View, point: int):
 
 POPUP_STYLE = """
 body {
+    margin: 0.8em;
+}
+code, .code_block {
+    background-color: color(var(--background) alpha(0.8));
     font-family: ui-monospace,SFMono-Regular,SF Mono,Menlo,Consolas,Liberation Mono,monospace;
-    line-height: 1.5;
+    border-radius: 0.4em;
 }
+
 code {
-    background-color: color(var(--background) alpha(0.8));
+    padding: 0 0.4em 0 0.4em;
 }
+
 .code_block {
-    background-color: color(var(--background) alpha(0.8));
+    padding: 0.4em;
 }
 """
 
