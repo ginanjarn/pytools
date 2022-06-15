@@ -913,8 +913,11 @@ class EventListener(sublime_plugin.EventListener):
         else:
             result = documentation.get("result")
             if result is not None:
-                content = result["content"]
+                content = result.get("content")
                 LOGGER.debug(f"result : {content}")
+
+                if not content:
+                    return
 
                 def on_navigate(link):
                     if link.startswith(":"):
