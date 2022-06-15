@@ -226,23 +226,35 @@ def get_workspace_path(view: sublime.View):
         return path
 
 
-ERROR_RESPONSE_PANEL_NAME = "error_response"
+class OutputPanel:
+    """output panel handler"""
 
+    NAME = "pytools"
 
-def show_error_result(window: sublime.Window, message: str) -> None:
-    """show error panel"""
+    @staticmethod
+    def set(message: str):
+        """set panel message"""
 
-    panel = window.create_output_panel(ERROR_RESPONSE_PANEL_NAME)
-    panel.set_read_only(False)
-    panel.run_command(
-        "append", {"characters": message},
-    )
-    window.run_command("show_panel", {"panel": f"output.{ERROR_RESPONSE_PANEL_NAME}"})
+        panel = sublime.active_window().get_output_panel(OutputPanel.NAME)
+        if not panel:
+            panel = sublime.active_window().create_output_panel(OutputPanel.NAME)
 
+        panel.set_read_only(False)
+        panel.run_command(
+            "append", {"characters": message},
+        )
 
-def hide_error_result(window: sublime.Window) -> None:
-    """hide error panel"""
-    window.destroy_output_panel(ERROR_RESPONSE_PANEL_NAME)
+    @staticmethod
+    def show():
+        """show panel"""
+        sublime.active_window().run_command(
+            "show_panel", {"panel": f"output.{OutputPanel.NAME}"}
+        )
+
+    @staticmethod
+    def destroy():
+        """destroy panel"""
+        sublime.active_window().destroy_output_panel(OutputPanel.NAME)
 
 
 class PytoolsFormatDocumentCommand(sublime_plugin.TextCommand):
@@ -263,7 +275,6 @@ class PytoolsFormatDocumentCommand(sublime_plugin.TextCommand):
         LOGGER.debug("formatting thread")
 
         def apply_changes(result):
-            hide_error_result(self.view.window())
             if diff := result.get("diff"):
                 self.view.run_command("pytools_apply_document_changes", {"diff": diff})
 
@@ -279,18 +290,21 @@ class PytoolsFormatDocumentCommand(sublime_plugin.TextCommand):
 
         except Exception as err:
             LOGGER.debug(f"formatting error: {repr(err)}")
-        else:
 
+        else:
             result = response.get("result")
             if result is not None:
                 apply_changes(result)
+                OutputPanel.destroy()
 
             if error := response.get("error"):
                 if error["code"] == client.NOT_INITIALIZED:
                     path = get_workspace_path(self.view)
                     SESSION.start(path)
+
                 else:
-                    show_error_result(self.view.window(), error["message"])
+                    OutputPanel.set(error["message"])
+                    OutputPanel.show()
 
     def is_visible(self):
         return self.view.match_selector(0, "source.python")
@@ -541,34 +555,18 @@ class Diagnostic:
     def show_diagnostic_panel(self, view: sublime.View):
         """show diagnostic panel for current view"""
 
-        window: sublime.Window = view.window()
-        panel = window.create_output_panel(self.panel_name)
-        panel.set_read_only(False)
-
-        try:
-            diagnostic_item: List[DiagnosticItem] = self.diagnostics[view.file_name()]
-            panel.run_command(
-                "append",
-                {
-                    "characters": "\n".join(
-                        [
-                            f"{os.path.basename(view.file_name())}:{item.row+1}:{item.column}: {item.message}"
-                            for item in diagnostic_item
-                        ]
-                    )
-                },
-            )
-            window.run_command("show_panel", {"panel": f"output.{self.panel_name}"})
-
-        except KeyError:
-            LOGGER.debug(f"no diagnostics report for {view.file_name()}")
-
-        except Exception as err:
-            LOGGER.debug(f"error show diagnostic for {view.file_name()}: {repr(err)}")
+        diagnostic_item: List[DiagnosticItem] = self.diagnostics[view.file_name()]
+        message = "\n".join(
+            [
+                f"{os.path.basename(view.file_name())}:{item.row+1}:{item.column}: {item.message}"
+                for item in diagnostic_item
+            ]
+        )
+        OutputPanel.set(message)
+        OutputPanel.show()
 
     def hide_diagnostic_panel(self, view: sublime.View):
-        window: sublime.Window = view.window()
-        window.destroy_output_panel(self.panel_name)
+        OutputPanel.destroy()
 
 
 DIAGNOSTIC = Diagnostic()
