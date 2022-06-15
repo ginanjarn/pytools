@@ -5,6 +5,7 @@ import re
 import os
 import subprocess
 from collections import defaultdict
+from dataclasses import dataclass
 from functools import wraps
 from threading import Lock, Thread
 from typing import Iterable, Iterator, List, Any, Optional, Dict
@@ -373,16 +374,13 @@ class DiffHunk:
         return cls(start_remove, end_remove, start_insert, end_insert)
 
 
-class TextChange:
+@dataclass
+class TextChangeItem:
     """text change item"""
 
-    def __init__(self, region: sublime.Region, new_text: str, cursor_move: int, /):
-        self.region = region
-        self.new_text = new_text
-        self.cursor_move = cursor_move
-
-    def __repr__(self):
-        return f"TextChange(region={self.region}, new_text={self.new_text}, cursor_move={self.cursor_move})"
+    region: sublime.Region
+    new_text: str
+    cursor_move: int
 
     def get_region(self, move=0):
         return sublime.Region(self.region.begin() + move, self.region.end() + move)
@@ -428,7 +426,7 @@ class PytoolsApplyDocumentChangesCommand(sublime_plugin.TextCommand):
 
     def apply_change(self, edit: sublime.Edit, hunks: Iterable[DiffHunk]):
         view: sublime.View = self.view
-        text_changes = [TextChange.from_hunk(view, change) for change in hunks]
+        text_changes = [TextChangeItem.from_hunk(view, change) for change in hunks]
         LOGGER.debug(text_changes)
 
         move = 0
@@ -439,32 +437,24 @@ class PytoolsApplyDocumentChangesCommand(sublime_plugin.TextCommand):
             move += text_change.cursor_move
 
 
+@dataclass
 class DiagnosticItem:
     """Diagnostic item"""
 
-    def __init__(self, severity, row, column, message):
-        self.severity = severity
-        self.row = row
-        self.column = column
-        self.message = message
-
-    def __repr__(self):
-        return (
-            f"DiagnosticItem(severity={self.severity}, row={self.row}, column={self.column},"
-            f" message={self.message})"
-        )
+    severity: str
+    row: int
+    column: int
+    message: str
 
     def get_region(self, view: sublime.View):
         """get region"""
 
-        point = view.text_point(self.row, self.column)
+        point = view.text_point(self.row - 1, self.column)
         region: sublime.Region = view.line(point)
-        # start selection from defined column
-        region.a = point
 
-        # end of line
-        if region.a == point:
-            region.a -= 1
+        if region.end() != point:
+            # start selection from defined column
+            region.a = point
 
         return region
 
