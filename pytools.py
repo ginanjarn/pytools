@@ -262,11 +262,16 @@ class PytoolsFormatDocumentCommand(sublime_plugin.TextCommand):
     def format_document(self, source):
         LOGGER.debug("formatting thread")
 
+        def apply_changes(result):
+            hide_error_result(self.view.window())
+            if diff := result.get("diff"):
+                self.view.run_command("pytools_apply_document_changes", {"diff": diff})
+
         try:
             if not SESSION.active:
                 path = get_workspace_path(self.view)
                 SESSION.start(path)
-            formatted = client.document_formatting(source)
+            response = client.document_formatting(source)
 
         except ConnectionRefusedError:
             LOGGER.debug("server not running")
@@ -276,20 +281,16 @@ class PytoolsFormatDocumentCommand(sublime_plugin.TextCommand):
             LOGGER.debug(f"formatting error: {repr(err)}")
         else:
 
-            result = formatted.get("result")
+            result = response.get("result")
             if result is not None:
-                hide_error_result(self.view.window())
-                self.view.run_command(
-                    "pytools_apply_document_changes", {"diff": result["diff"]}
-                )
-                return
+                apply_changes(result)
 
-            LOGGER.debug(formatted["error"])
-            if formatted["error"]["code"] == client.NOT_INITIALIZED:
-                path = get_workspace_path(self.view)
-                SESSION.start(path)
-            else:
-                show_error_result(self.view.window(), formatted["error"]["message"])
+            if error := response.get("error"):
+                if error["code"] == client.NOT_INITIALIZED:
+                    path = get_workspace_path(self.view)
+                    SESSION.start(path)
+                else:
+                    show_error_result(self.view.window(), error["message"])
 
     def is_visible(self):
         return self.view.match_selector(0, "source.python")
@@ -608,9 +609,7 @@ class PytoolsPublishDiagnosticCommand(sublime_plugin.TextCommand):
                 path = get_workspace_path(self.view)
                 SESSION.start(path)
             source = self.view.substr(sublime.Region(0, self.view.size()))
-            diagnostics = client.document_publish_diagnostic(
-                source=source, path=file_name
-            )
+            response = client.document_publish_diagnostic(source=source, path=file_name)
 
         except ConnectionRefusedError:
             LOGGER.debug("server not running")
@@ -619,15 +618,15 @@ class PytoolsPublishDiagnosticCommand(sublime_plugin.TextCommand):
         except Exception as err:
             LOGGER.debug(f"publish diagnostic error: {repr(err)}")
         else:
-            result = diagnostics.get("result")
+            result = response.get("result")
             if result is not None:
                 DIAGNOSTIC.add_diagnostic(self.view, result)
                 return
 
-            LOGGER.debug(diagnostics["error"])
-            if diagnostics["error"]["code"] == client.NOT_INITIALIZED:
-                path = get_workspace_path(self.view)
-                SESSION.start(path)
+            if error := response.get("error"):
+                if error["code"] == client.NOT_INITIALIZED:
+                    path = get_workspace_path(self.view)
+                    SESSION.start(path)
 
     def is_visible(self):
         return self.view.match_selector(0, "source.python")
@@ -832,6 +831,26 @@ class EventListener(sublime_plugin.EventListener):
 
     @pipe
     def document_completion(self, view: sublime.View, param: CompletionParam):
+        """document completion task"""
+
+        def trigger_completion():
+            view.run_command("hide_auto_complete")
+            view.run_command(
+                "auto_complete",
+                {
+                    "disable_auto_insert": True,
+                    "next_completion_if_showing": False,
+                    "auto_complete_commit_on_tab": True,
+                },
+            )
+
+        def show_completion(result):
+            items = [CompletionItem.from_rpc(item) for item in result]
+            LOGGER.debug(f"candidates = {len(items)}")
+            self._prev_param = param
+            self.completion = items
+            trigger_completion()
+
         try:
             if not SESSION.active:
                 path = get_workspace_path(view)
@@ -839,7 +858,7 @@ class EventListener(sublime_plugin.EventListener):
             source = param.source
             row, col = view.rowcol(param.location)
             row += 1
-            completions = client.document_completion(source, row, col)
+            response = client.document_completion(source, row, col)
 
         except ConnectionRefusedError:
             LOGGER.debug("server not running")
@@ -849,28 +868,14 @@ class EventListener(sublime_plugin.EventListener):
             LOGGER.debug(err)
 
         else:
-            result = completions.get("result")
+            result = response.get("result")
             if result is not None:
-                items = [CompletionItem.from_rpc(item) for item in result]
-                LOGGER.debug(f"candidates = {len(items)}")
-                self._prev_param = param
-                self.completion = items
+                show_completion(result)
 
-                view.run_command("hide_auto_complete")
-                view.run_command(
-                    "auto_complete",
-                    {
-                        "disable_auto_insert": True,
-                        "next_completion_if_showing": False,
-                        "auto_complete_commit_on_tab": True,
-                    },
-                )
-                return
-
-            LOGGER.debug(completions["error"])
-            if completions["error"]["code"] == client.NOT_INITIALIZED:
-                path = get_workspace_path(view)
-                SESSION.start(path)
+            if error := response.get("error"):
+                if error["code"] == client.NOT_INITIALIZED:
+                    path = get_workspace_path(view)
+                    SESSION.start(path)
 
     def on_hover(self, view: sublime.View, point: int, hover_zone: int):
         """on hover"""
@@ -889,6 +894,29 @@ class EventListener(sublime_plugin.EventListener):
 
     @pipe
     def on_hover_text(self, view: sublime.View, point: int):
+        """on hover text task"""
+
+        def on_navigate(link):
+            if link.startswith(":"):
+                link = "".join([view.file_name(), link])
+            view.window().open_file(link, flags=sublime.ENCODED_POSITION)
+
+        def show_documentation(result):
+            content = result.get("content")
+            if not content:
+                return
+
+            # add css style
+            content = f"<style>{POPUP_STYLE}</style>\n{content}" if content else ""
+
+            view.show_popup(
+                content,
+                flags=sublime.HIDE_ON_MOUSE_MOVE_AWAY,
+                location=point,
+                max_width=1024,
+                on_navigate=on_navigate,
+            )
+
         try:
             if not SESSION.active:
                 path = get_workspace_path(view)
@@ -901,7 +929,7 @@ class EventListener(sublime_plugin.EventListener):
             source = view.substr(sublime.Region(0, end_point))
             row, col = view.rowcol(end_point)
             row += 1
-            documentation = client.document_hover(source, row, col)
+            response = client.document_hover(source, row, col)
 
         except ConnectionRefusedError:
             LOGGER.debug("server not running")
@@ -911,40 +939,15 @@ class EventListener(sublime_plugin.EventListener):
             LOGGER.debug(err)
 
         else:
-            result = documentation.get("result")
+            result = response.get("result")
             if result is not None:
-                content = result.get("content")
-                LOGGER.debug(f"result : {content}")
+                show_documentation(result)
 
-                if not content:
-                    return
-
-                def on_navigate(link):
-                    if link.startswith(":"):
-                        file_name = view.file_name()
-                        link = "".join([file_name, link])
-                    view.window().open_file(link, flags=sublime.ENCODED_POSITION)
-
-                try:
-                    content = (
-                        f"<style>{POPUP_STYLE}</style>\n{content}" if content else ""
-                    )
-                    view.show_popup(
-                        content,
-                        flags=sublime.HIDE_ON_MOUSE_MOVE_AWAY,
-                        location=point,
-                        max_width=1024,
-                        on_navigate=on_navigate,
-                    )
-                except Exception as err:
-                    LOGGER.debug(err)
-
-                return
-
-            LOGGER.debug(documentation["error"])
-            if documentation["error"]["code"] == client.NOT_INITIALIZED:
-                path = get_workspace_path(view)
-                SESSION.start(path)
+            error = response.get("error")
+            if error:
+                if error["code"] == client.NOT_INITIALIZED:
+                    path = get_workspace_path(view)
+                    SESSION.start(path)
 
 
 class PytoolsOpenTerminalCommand(sublime_plugin.TextCommand):
