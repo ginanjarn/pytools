@@ -311,32 +311,16 @@ class PytoolsFormatDocumentCommand(sublime_plugin.TextCommand):
         return self.view.match_selector(0, "source.python")
 
 
+@dataclass
 class DiffHunk:
     """DiffHunk"""
 
-    header_pattern = re.compile(r"@@ \-(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
-
-    def __init__(self, start_remove, end_remove, start_insert, end_insert):
-        self.start_remove, self.end_remove = start_remove, end_remove
-        self.start_insert, self.end_insert = start_insert, end_insert
-        self._removed_text = []
-        self._insert_text = []
-
-    def __repr__(self):
-        return str(
-            {
-                "removed": {
-                    "start": self.start_remove,
-                    "end": self.end_remove,
-                    "text": self.removed_text,
-                },
-                "insert": {
-                    "start": self.start_insert,
-                    "end": self.end_insert,
-                    "text": self.insert_text,
-                },
-            }
-        )
+    start_remove: int
+    end_remove: int
+    start_insert: int
+    end_insert: int
+    _removed_text: List[str]
+    _insert_text: List[str]
 
     def append_line(self, text: str):
         if text.startswith(" "):
@@ -359,19 +343,27 @@ class DiffHunk:
 
     @classmethod
     def from_header(cls, diff_header: str):
-        match = cls.header_pattern.match(diff_header)
-        if not match:
-            raise ValueError(f"unable parser diff_header from {diff_header}")
+        """create from diff header"""
 
-        groups = match.groups()
-        remove_span = int(groups[1]) - 1 if groups[1] else 0
-        insert_span = int(groups[3]) - 1 if groups[3] else 0
-        start_remove = int(groups[0]) - 1  # editor use 0-based line index where diff 1
-        end_remove = start_remove + remove_span
-        start_insert = int(groups[2]) - 1  # editor use 0-based line index where diff 1
-        end_insert = start_insert + insert_span
+        # diff format: `@@ -sub,lines_changed +insert,lines_changed @@`
+        if match := re.match(
+            r"@@ (?:\-(\d+)(?:,(\d+))? )?(?:\+(\d+)(?:,(\d+))? )?@@", diff_header
+        ):
+            groups = match.groups()
+            remove_span = int(groups[1]) - 1 if groups[1] else 0
+            insert_span = int(groups[3]) - 1 if groups[3] else 0
 
-        return cls(start_remove, end_remove, start_insert, end_insert)
+            # editor use 0-based line index where diff 1
+            start_remove = int(groups[0]) - 1
+            end_remove = start_remove + remove_span
+
+            # editor use 0-based line index where diff 1
+            start_insert = int(groups[2]) - 1
+            end_insert = start_insert + insert_span
+
+            return cls(start_remove, end_remove, start_insert, end_insert, [], [])
+
+        raise ValueError(f"unable parser diff_header from {diff_header}")
 
 
 @dataclass
@@ -405,7 +397,7 @@ class PytoolsApplyDocumentChangesCommand(sublime_plugin.TextCommand):
         hunks = self.get_hunk(diff)
         self.apply_change(edit, hunks)
 
-    def get_hunk(self, diff: str) -> Iterator:
+    def get_hunk(self, diff: str) -> Iterator[DiffHunk]:
         hunk = None
 
         for line in diff.split("\n"):
