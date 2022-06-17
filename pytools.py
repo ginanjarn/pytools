@@ -621,17 +621,7 @@ class PytoolsPublishDiagnosticCommand(sublime_plugin.TextCommand):
 
 
 class CompletionParam:
-
-    # match: string, tuple, dict,list
-    access_member = re.compile(r"^(.*[\w\)\}\]\"']\.)\w*$")
-
-    # fmt: off
-    nested_import = re.compile(
-        r"^(.*\w+\,)\w*$"
-        r"|^(.*\w+\,)\s*\w*$"
-        r"|^(.*\w+\s*\,)\s*\w*$"
-    )
-    # fmt: on
+    """completion param"""
 
     def __init__(self, view: sublime.View):
         # complete on first cursor
@@ -654,21 +644,27 @@ class CompletionParam:
             LOGGER.debug("space")
             raise ValueError("Cancel completion: 'line is space'")
 
-        match = self.access_member.match(line_str)
-        if match:
-            LOGGER.debug("access_member")
-            return start_line + max(len(group) for group in match.groups() if group)
+        # trigger completion for identifier
+        if found := re.search(r"([A-Za-z]\w*\.)\w*$", line_str):
+            dot_index = found.group(1).index(".")
+            # set cursor next to dot
+            return start_line + found.start() + dot_index + 1
+
+        # trigger completion for string, dict, set, tuple, list
+        if found := re.search(r"([\w\"'\}\]\)]\.)\w*$", line_str):
+            dot_index = found.group(1).index(".")
+            # set cursor next to dot
+            return start_line + found.start() + dot_index + 1
 
         word_region = view.word(cursor)
         word_str = view.substr(word_region)
 
-        lstrip_line_str = line_str.lstrip()
-        if lstrip_line_str.startswith("from") or lstrip_line_str.startswith("import"):
+        if match := re.match(r"^\s*(?:import|from)", line_str):
+            if found := re.search(r"(\w+\s*,)\s*\w*$", line_str):
+                comma_index = found.group(1).index(",")
+                # set cursor next to comma
+                return start_line + found.start() + comma_index + 1
 
-            match = self.nested_import.match(line_str)
-            if match:
-                LOGGER.debug("nested_import")
-                return start_line + max(len(group) for group in match.groups() if group)
             if word_str.isidentifier():
                 return word_region.a
             return cursor
