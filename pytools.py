@@ -441,7 +441,7 @@ class DiagnosticItem:
     def get_region(self, view: sublime.View):
         """get region"""
 
-        point = view.text_point(self.row - 1, self.column)
+        point = view.text_point(self.row, self.column - 1)
         region: sublime.Region = view.line(point)
 
         if region.end() != point:
