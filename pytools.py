@@ -494,7 +494,7 @@ class Diagnostic:
         """clean diagnostic at view"""
 
         file_name = view.file_name()
-        del self.diagnostics[file_name]
+        # del self.diagnostics[file_name]
         self.erase_regions(view)
 
         # clean up, allocate new dict to release memory allocation
